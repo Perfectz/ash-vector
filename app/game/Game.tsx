@@ -97,7 +97,7 @@ export default function Game() {
   const control = useRef<Input>(neutralInput()),
     keys = useRef(new Set<string>()),
     pointer = useRef({ x: 0, y: 0, used: false, down: false }),
-    touch = useRef({ x: 0, z: 0, fire: false });
+    touch = useRef({ x: 0, fire: false });
   const [ready, setReady] = useState(false),
     [error, setError] = useState(''),
     [muted, setMuted] = useState(false),
@@ -119,7 +119,7 @@ export default function Game() {
     } else if (s.mode === 'dead') s.retry();
     keys.current.clear();
     control.current = neutralInput();
-    touch.current = { x: 0, z: 0, fire: false };
+    touch.current = { x: 0, fire: false };
     pointer.current.down = false;
     void sound.current?.start().catch(() => {});
     setView(snapshot(sim.current!));
@@ -162,10 +162,7 @@ export default function Game() {
           (held.has('KeyD') || held.has('ArrowRight') ? 1 : 0) -
           (held.has('KeyA') || held.has('ArrowLeft') ? 1 : 0) +
           touch.current.x;
-        input.mz =
-          (held.has('KeyS') || held.has('ArrowDown') ? 1 : 0) -
-          (held.has('KeyW') || held.has('ArrowUp') ? 1 : 0) +
-          touch.current.z;
+        input.aim = null;
         input.fire =
           pointer.current.down || held.has('KeyJ') || touch.current.fire;
         input.autoAim = held.has('KeyJ') || touch.current.fire;
@@ -179,7 +176,6 @@ export default function Game() {
         if (gp) {
           const dead = (x: number) => (Math.abs(x) > 0.18 ? x : 0);
           input.mx += dead(gp.axes[0] ?? 0);
-          input.mz += dead(gp.axes[1] ?? 0);
           if (gp.buttons[7]?.pressed) {
             input.fire = true;
             input.autoAim = true;
@@ -187,12 +183,31 @@ export default function Game() {
           if (Math.hypot(gp.axes[2] ?? 0, gp.axes[3] ?? 0) > 0.2) {
             input.aim = {
               x: current.player.x + (gp.axes[2] ?? 0) * 20,
-              y: current.player.y + 1.4,
-              z: current.player.z + (gp.axes[3] ?? 0) * 20,
+              y: current.player.y + 1.4 - (gp.axes[3] ?? 0) * 20,
+              z: 0,
             };
             input.autoAim = false;
           }
         }
+        const aimUp =
+          (held.has('KeyW') || held.has('ArrowUp') ? 1 : 0) -
+          (held.has('KeyS') || held.has('ArrowDown') ? 1 : 0);
+        // Keyboard eight-way fire and planted aiming, alongside mouse/stick aim.
+        if (aimUp || held.has('KeyC')) {
+          const horizontal =
+            Math.abs(input.mx) > 0.1
+              ? Math.sign(input.mx)
+              : aimUp
+                ? 0
+                : Math.cos(current.player.angle);
+          input.aim = {
+            x: current.player.x + horizontal * 20,
+            y: current.player.y + 1.4 + aimUp * 20,
+            z: 0,
+          };
+          input.autoAim = false;
+        }
+        if (held.has('KeyC')) input.mx = 0;
         accumulator += delta;
         while (accumulator >= 1 / 60) {
           current.step(1 / 60, input);
@@ -273,7 +288,7 @@ export default function Game() {
     const blur = () => {
       keys.current.clear();
       pointer.current.down = false;
-      touch.current = { x: 0, z: 0, fire: false };
+      touch.current = { x: 0, fire: false };
       control.current = neutralInput();
       if (sim.current?.mode === 'playing') sim.current.togglePause();
     };
@@ -354,10 +369,6 @@ export default function Game() {
       -1,
       Math.min(1, (e.clientX - r.left - r.width / 2) / 35),
     );
-    touch.current.z = Math.max(
-      -1,
-      Math.min(1, (e.clientY - r.top - r.height / 2) / 35),
-    );
   };
   const touchAction = (key: 'jump' | 'dash' | 'grenade') => {
     control.current[key] = true;
@@ -371,7 +382,7 @@ export default function Game() {
       <div
         className="world"
         ref={host}
-        aria-label="3D industrial skybridge battlefield"
+        aria-label="2.5D side-scrolling industrial battlefield"
       />
       <div className="cinema-shade" />
       <div className={`damage-vignette ${view.hurt ? 'visible' : ''}`} />
@@ -428,7 +439,7 @@ export default function Game() {
       {!inMission && (
         <section className="title-screen">
           <div className="eyebrow">
-            <span /> OPERATION 01 / BLACK RAIN
+            <span /> 2.5D RUN & GUN / BLACK RAIN
           </div>
           <h1>
             ASH
@@ -626,7 +637,8 @@ export default function Game() {
             </button>
             <div className="pause-controls">
               <p>
-                <kbd>W A S D</kbd> Move in 3D <kbd>SPACE</kbd> Double jump
+                <kbd>A D</kbd> Move <kbd>W S</kbd> Aim up / down{' '}
+                <kbd>SPACE</kbd> Double jump
               </p>
               <p>
                 <kbd>MOUSE</kbd> Aim + hold to fire <kbd>J</kbd> Auto-aim fire
@@ -636,6 +648,9 @@ export default function Game() {
               </p>
               <p>
                 <kbd>ESC</kbd> Pause / resume
+              </p>
+              <p>
+                <kbd>C</kbd> Hold position + directional aim
               </p>
               <small>
                 Controller: left stick move · right stick aim · RT fire
@@ -700,14 +715,12 @@ export default function Game() {
             }}
             onPointerUp={() => {
               touch.current.x = 0;
-              touch.current.z = 0;
             }}
             onPointerCancel={() => {
               touch.current.x = 0;
-              touch.current.z = 0;
             }}
           >
-            <span>MOVE</span>
+            <span>← MOVE →</span>
           </div>
           <div className="touch-actions">
             <button onPointerDown={() => touchAction('grenade')}>E</button>
@@ -733,7 +746,7 @@ export default function Game() {
       )}
       <footer className="game-footer">
         <div>
-          <kbd>W A S D</kbd>
+          <kbd>A D</kbd>
           <span>MOVE</span>
           <kbd>MOUSE</kbd>
           <span>AIM + FIRE</span>
@@ -745,7 +758,7 @@ export default function Game() {
             CONTROLS {help ? '−' : '+'}
           </button>
         </div>
-        <span className="build-label">TACTICAL ACTION / 3D</span>
+        <span className="build-label">RUN & GUN / 2.5D</span>
       </footer>
       {help && (
         <aside className="help-sheet">
@@ -754,19 +767,27 @@ export default function Game() {
           </button>
           <h3>FIELD MANUAL</h3>
           <p>
-            <kbd>W A S D</kbd> Move across and along the bridge.
+            <kbd>A D</kbd> Run left / right. <kbd>W S</kbd> Aim up / down.
           </p>
           <p>
-            <kbd>MOUSE</kbd> Aim. Hold left click to fire.
+            <kbd>MOUSE</kbd> Point at any enemy, including drones. Hold to fire.
           </p>
           <p>
             <kbd>J</kbd> Hold to fire with automatic targeting.
           </p>
           <p>
+            A gold targeting ring confirms an enemy lock. Cyan marks free aim.
+          </p>
+          <p>
+            <kbd>W + D + J</kbd> Fire diagonally. <kbd>C</kbd> Hold position to
+            aim.
+          </p>
+          <p>
             <kbd>SPACE</kbd> Jump. Press again for a double jump.
           </p>
           <p>
-            <kbd>SHIFT</kbd> Dash through enemy fire.
+            <kbd>SHIFT</kbd> Dash through enemy fire, on the ground or in the
+            air.
           </p>
           <p>
             <kbd>E</kbd> Grenade. <kbd>Q</kbd> Cycle weapons.

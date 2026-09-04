@@ -53,7 +53,6 @@ export type GameEvent = Vec & {
 };
 export type Input = {
   mx: number;
-  mz: number;
   aim: Vec | null;
   fire: boolean;
   autoAim: boolean;
@@ -64,7 +63,6 @@ export type Input = {
 };
 export const neutralInput = (): Input => ({
   mx: 0,
-  mz: 0,
   aim: null,
   fire: false,
   autoAim: false,
@@ -85,13 +83,25 @@ export const weapons = [
   { name: 'ARC LANCE', short: 'LANCE', rate: 0.35, damage: 48, speed: 105 },
 ];
 export const cover = [
-  { x: 27, z: -3 },
-  { x: 44, z: 3.4 },
-  { x: 69, z: -4 },
-  { x: 91, z: 3 },
-  { x: 119, z: -3.5 },
-  { x: 139, z: 4 },
+  { x: 27, z: 0 },
+  { x: 44, z: 0 },
+  { x: 69, z: 0 },
+  { x: 91, z: 0 },
+  { x: 119, z: 0 },
+  { x: 139, z: 0 },
 ];
+export const platforms = [
+  { x: 37, y: 2.7, width: 6 },
+  { x: 79, y: 2.9, width: 7 },
+  { x: 129, y: 2.6, width: 6 },
+  { x: 149, y: 3.2, width: 5 },
+];
+// One source of truth for aiming and collision, including airborne drone cores.
+export const enemyCenter = (e: Enemy): Vec => ({
+  x: e.x,
+  y: e.y + (e.kind === 'drone' ? 0 : 1),
+  z: 0,
+});
 export const sectorEnds = [57, 109, 158, 190];
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
 const dist = (a: Vec, b: Vec) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
@@ -120,10 +130,11 @@ export class Simulation {
   player = {
     x: 10,
     y: 0,
-    z: 2,
+    z: 0,
     vy: 0,
     hp: 100,
     angle: 0,
+    aimPitch: 0,
     jumps: 0,
     invulnerable: 0,
     dashTime: 0,
@@ -136,7 +147,6 @@ export class Simulation {
     lastDamage: -10,
     moving: 0,
     dashX: 1,
-    dashZ: 0,
   };
   boss = {
     x: 177,
@@ -151,6 +161,8 @@ export class Simulation {
     flash: 0,
   };
   enemies: Enemy[] = [];
+  aimPoint: Vec = { x: 25, y: 1.4, z: 0 };
+  targetLocked = false;
   bullets: Bullet[] = [];
   grenades: Grenade[] = [];
   hazards: Hazard[] = [];
@@ -193,12 +205,12 @@ export class Simulation {
       ['turret', 150, 4.5, 2],
       ['soldier', 153, -4, 2],
     ];
-    this.enemies = waves.map(([kind, x, z, sector]) => ({
+    this.enemies = waves.map(([kind, x, height, sector]) => ({
       id: this.id++,
       kind,
       x,
-      y: kind === 'drone' ? 3.5 : 0,
-      z,
+      y: kind === 'drone' ? 4 + Math.abs(height) * 0.2 : 0,
+      z: 0,
       sector,
       hp: kind === 'turret' ? 85 : kind === 'drone' ? 42 : 48,
       maxHp: kind === 'turret' ? 85 : kind === 'drone' ? 42 : 48,
@@ -302,40 +314,36 @@ export class Simulation {
       origin = { x: p.x, y: p.y + 1.45, z: p.z };
     const candidates = this.enemies
       .filter((e) => e.active && e.hp > 0)
-      .map((e) => ({ x: e.x, y: e.y + 1.05, z: e.z }));
+      .map(enemyCenter);
+    this.targetLocked = false;
     if (this.boss.active)
       candidates.push({ x: this.boss.x - 1.4, y: 4.5, z: this.boss.z });
     if (input.autoAim) {
       candidates.sort((a, b) => dist(a, origin) - dist(b, origin));
-      if (candidates.length && dist(candidates[0], origin) < 45)
+      if (candidates.length && dist(candidates[0], origin) < 23) {
+        this.targetLocked = true;
         return candidates[0];
+      }
     }
     let target = input.aim ?? {
       x: p.x + Math.cos(p.angle) * 30,
       y: origin.y,
-      z: p.z - Math.sin(p.angle) * 30,
+      z: 0,
     };
-    // Gentle vertical assistance makes airborne targets readable without flattening the 3D arena.
+    // Mouse and stick aiming share the visible XY plane. Snap only close to the
+    // intended target; moving the cursor into empty space preserves free aim.
     if (input.aim) {
-      const dx = target.x - p.x,
-        dz = target.z - p.z,
-        len = Math.hypot(dx, dz) || 1;
-      let best = 3.2;
+      let best = 1.35;
       for (const c of candidates) {
-        const along = ((c.x - p.x) * dx + (c.z - p.z) * dz) / len;
-        const lateral = Math.abs((c.x - p.x) * dz - (c.z - p.z) * dx) / len;
-        if (
-          along > 0 &&
-          along < 42 &&
-          lateral < best &&
-          Math.hypot(target.x - c.x, target.z - c.z) < 8
-        ) {
+        const distance = Math.hypot(input.aim.x - c.x, input.aim.y - c.y);
+        if (distance < best && dist(c, origin) < 23) {
           target = c;
-          best = lateral;
+          best = distance;
+          this.targetLocked = true;
         }
       }
     }
-    return target;
+    return { ...target, z: 0 };
   }
   shoot(
     origin: Vec,
@@ -346,18 +354,14 @@ export class Simulation {
     weapon = 0,
     spread = 0,
   ) {
-    const dx = target.x - origin.x,
-      dy = target.y - origin.y,
-      dz = target.z - origin.z;
-    const angle = Math.atan2(dz, dx) + spread,
-      flat = Math.hypot(dx, dz);
-    const len = Math.hypot(flat, dy) || 1;
+    const angle = Math.atan2(target.y - origin.y, target.x - origin.x) + spread;
     this.bullets.push({
       ...origin,
+      z: 0,
       id: this.id++,
-      vx: ((Math.cos(angle) * flat) / len) * speed,
-      vy: (dy / len) * speed,
-      vz: ((Math.sin(angle) * flat) / len) * speed,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      vz: 0,
       damage,
       friendly,
       life: friendly ? 0.72 : 5,
@@ -378,14 +382,11 @@ export class Simulation {
     p.grenadeCooldown -= dt;
     p.flash = Math.max(0, p.flash - dt);
     if (this.time - p.lastDamage > 5) p.hp = Math.min(100, p.hp + dt * 2.5);
-    let dx = input.mx,
-      dz = input.mz;
-    const len = Math.hypot(dx, dz);
-    if (len > 1) {
-      dx /= len;
-      dz /= len;
-    }
-    p.moving = Math.min(1, len);
+    let dx = clamp(input.mx, -1, 1);
+    const len = Math.abs(dx);
+    p.moving = len;
+    if (!input.aim && !input.autoAim && len > 0.1)
+      p.angle = dx < 0 ? Math.PI : 0;
     if (input.switchWeapon) p.weapon = (p.weapon + 1) % 3;
     if (input.jump && p.jumps < 2) {
       p.vy = p.jumps === 0 ? 10 : 8.7;
@@ -396,28 +397,29 @@ export class Simulation {
       p.dashTime = 0.23;
       p.dashCooldown = 1.3;
       p.invulnerable = 0.32;
-      p.dashX = len ? dx : Math.cos(p.angle);
-      p.dashZ = len ? dz : -Math.sin(p.angle);
+      p.dashX = len > 0.1 ? Math.sign(dx) : Math.cos(p.angle);
+      if (p.y > 0) p.vy = 0;
       this.emit('dash', p);
     }
     if (p.dashTime > 0) {
       dx = p.dashX * 3.6;
-      dz = p.dashZ * 3.6;
       p.dashTime -= dt;
     }
     const oldX = p.x,
-      oldZ = p.z,
       oldY = p.y;
     p.x += dx * 7.2 * dt;
-    p.z += dz * 7.2 * dt;
+    p.z = 0;
     const locked = this.sector < 3 && this.remaining() > 0;
     p.x = clamp(
       p.x,
       this.sector === 0 ? 2 : sectorEnds[this.sector - 1] - 2,
-      locked ? sectorEnds[this.sector] - 1 : sectorEnds[this.sector] + 1,
+      this.boss.active
+        ? this.boss.x - 3.2
+        : locked
+          ? sectorEnds[this.sector] - 1
+          : sectorEnds[this.sector] + 1,
     );
-    p.z = clamp(p.z, -6.7, 6.7);
-    p.vy -= 25 * dt;
+    if (p.dashTime <= 0) p.vy -= 25 * dt;
     p.y += p.vy * dt;
     let floor = 0;
     for (const c of cover) {
@@ -426,9 +428,18 @@ export class Simulation {
           floor = 1.35;
         } else if (p.y < 1.3) {
           p.x = oldX;
-          p.z = oldZ;
         }
       }
+    }
+    // One-way ledges: jump up through them and land on the way down.
+    for (const ledge of platforms) {
+      if (
+        Math.abs(p.x - ledge.x) < ledge.width / 2 + 0.25 &&
+        oldY >= ledge.y &&
+        p.y <= ledge.y &&
+        p.vy <= 0
+      )
+        floor = Math.max(floor, ledge.y);
     }
     if (p.y <= floor) {
       p.y = floor;
@@ -461,17 +472,16 @@ export class Simulation {
     }
     for (const e of this.enemies) {
       e.flash = Math.max(0, e.flash - dt);
-      e.active = e.sector === this.sector && e.x < p.x + 29;
+      e.active = e.sector === this.sector && e.x < p.x + 18;
       if (!e.active) continue;
       const flat = Math.hypot(p.x - e.x, p.z - e.z);
       e.angle = Math.atan2(-(p.z - e.z), p.x - e.x);
       if (e.kind === 'soldier' && flat > 9) {
-        e.x += ((p.x - e.x) / (flat || 1)) * 1.25 * dt;
-        e.z += ((p.z - e.z) / (flat || 1)) * 1.25 * dt;
+        const nextX = e.x + Math.sign(p.x - e.x) * 1.25 * dt;
+        if (!cover.some((c) => Math.abs(nextX - c.x) < 1.7)) e.x = nextX;
       }
       if (e.kind === 'drone') {
-        e.y = 3.0 + Math.sin(this.time * 2 + e.id) * 0.7;
-        e.z += Math.sin(this.time + e.id) * dt * 0.6;
+        e.y = 4.5 + Math.sin(this.time * 1.7 + e.id) * 0.85;
       }
       e.cooldown -= dt;
       if (e.cooldown <= 0) {
@@ -498,13 +508,15 @@ export class Simulation {
       if (flat < 1.05 && p.y < 2 && e.kind !== 'drone') this.damagePlayer(12);
     }
     const target = this.aimTarget(input);
-    p.angle = Math.atan2(-(target.z - p.z), target.x - p.x);
+    this.aimPoint = target;
+    if (Math.abs(target.x - p.x) > 0.05) p.angle = target.x < p.x ? Math.PI : 0;
+    p.aimPitch = Math.atan2(target.y - (p.y + 1.4), Math.abs(target.x - p.x));
     if (input.fire && p.shotCooldown <= 0) {
       const w = weapons[p.weapon],
         origin = {
-          x: p.x + Math.cos(p.angle) * 1.65,
-          y: p.y + 1.4,
-          z: p.z - Math.sin(p.angle) * 1.65,
+          x: p.x + Math.cos(p.angle) * Math.cos(p.aimPitch) * 1.2,
+          y: p.y + 1.4 + Math.sin(p.aimPitch) * 1.2,
+          z: 0,
         };
       const n = p.weapon === 1 ? 7 : 1;
       for (let j = 0; j < n; j++)
@@ -571,11 +583,7 @@ export class Simulation {
       if (b.friendly) {
         for (const e of this.enemies) {
           if (!e.active || e.hp <= 0) continue;
-          const center = {
-            x: e.x,
-            y: e.y + (e.kind === 'drone' ? 0 : 1),
-            z: e.z,
-          };
+          const center = enemyCenter(e);
           if (
             segmentDistance(center, old, b) < (e.kind === 'turret' ? 0.9 : 0.78)
           ) {
@@ -653,7 +661,7 @@ export class Simulation {
       this.noticeTime = 3;
       this.emit('explosion', { ...b, y: 4 }, 2);
     }
-    b.z = Math.sin(this.time * 0.45) * 1.4;
+    b.z = 0;
     b.cooldown -= dt;
     if (b.cooldown <= 0) {
       b.attack++;
@@ -663,16 +671,18 @@ export class Simulation {
             id: this.id++,
             x: clamp(p.x + (j - 2) * 2.3, 158, 173),
             y: 0.05,
-            z: clamp(p.z + Math.sin(j * 2) * 3, -6, 6),
-            radius: 1.7,
+            z: 0,
+            radius: 1.05,
             timer: 1.5,
             exploded: false,
           });
         this.notice = 'MISSILE LOCK // KEEP MOVING';
         this.noticeTime = 1.5;
       } else {
-        for (const s of [-1, 1]) {
-          const origin = { x: b.x - 2.5, y: 3.8, z: b.z + s * 2.55 };
+        // Alternating cannon heights create one legible fan, with gaps wide
+        // enough to dodge on the shared plane instead of overlapping volleys.
+        {
+          const origin = { x: b.x - 2.5, y: b.attack % 2 ? 4.25 : 2.7, z: 0 };
           const n = 5 + b.phase * 2;
           for (let j = 0; j < n; j++)
             this.shoot(

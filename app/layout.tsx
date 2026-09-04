@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: 'ASH VECTOR — Operation Black Rain',
   description:
-    'A fully 3D arcade assault. Breach the skybridge, destroy the siege engine, and survive Operation Black Rain.',
+    'A cinematic 2.5D run-and-gun assault. Double jump, air dash, and blast through Operation Black Rain.',
 };
 
 export default function RootLayout({

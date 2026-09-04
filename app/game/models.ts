@@ -1,5 +1,6 @@
 import * as T from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { cover, platforms } from './simulation';
 
 export const palette = {
   armor: new T.MeshStandardMaterial({
@@ -323,7 +324,7 @@ export function makeWorld(scene: T.Scene) {
   // Modular deck plates, recessed rails and exposed structural supports.
   for (let x = -16; x < 204; x += 8) {
     box(env, ground, x, -0.42, 0, 7.92, 0.8, 15);
-    for (const z of [-7.5, 7.5]) {
+    for (const z of [-7.5]) {
       box(env, palette.dark, x, -0.8, z, 8, 1.4, 0.6);
       box(env, palette.steel, x, 0.11, z, 8, 0.22, 0.35);
       box(env, palette.fire, x, 0.25, z * 0.955, 3, 0.035, 0.08);
@@ -344,7 +345,7 @@ export function makeWorld(scene: T.Scene) {
   }
   // Gantries frame the route, with cross-bracing and suspended industrial equipment.
   for (let x = 8; x < 190; x += 32) {
-    for (const z of [-8.8, 8.8]) {
+    for (const z of [-8.8]) {
       box(env, palette.dark, x, 5, z, 0.85, 12, 1.1);
       box(env, palette.orange, x, 2.2, z, 0.92, 1.2, 1.2);
       box(env, palette.steel, x + 0.48, 5, z, 0.13, 11, 0.32);
@@ -424,14 +425,7 @@ export function makeWorld(scene: T.Scene) {
   sun.position.set(100, 42, -190);
   env.add(sun);
   // Cargo has a readable collision silhouette; crates are also jumpable cover.
-  const crates = [
-    { x: 27, z: -3 },
-    { x: 44, z: 3.4 },
-    { x: 69, z: -4 },
-    { x: 91, z: 3 },
-    { x: 119, z: -3.5 },
-    { x: 139, z: 4 },
-  ];
+  const crates = cover;
   for (const c of crates) {
     box(env, palette.dark, c.x, 0.65, c.z, 2.6, 1.3, 2.2);
     box(env, palette.orange, c.x, 1.31, c.z, 2.65, 0.08, 2.25);
@@ -449,6 +443,41 @@ export function makeWorld(scene: T.Scene) {
         0.88,
         0.025,
       );
+  }
+  // Elevated routes share collision data with the simulation. Rear supports
+  // leave clear silhouettes around the player and airborne targets.
+  for (const ledge of platforms) {
+    box(env, palette.dark, ledge.x, ledge.y - 0.2, 0, ledge.width, 0.4, 2.4);
+    box(
+      env,
+      palette.steel,
+      ledge.x,
+      ledge.y - 0.04,
+      0,
+      ledge.width,
+      0.08,
+      2.45,
+    );
+    box(
+      env,
+      palette.cyan,
+      ledge.x,
+      ledge.y - 0.12,
+      1.23,
+      ledge.width - 0.2,
+      0.07,
+      0.035,
+    );
+    for (const side of [-1, 1]) {
+      const x = ledge.x + side * (ledge.width / 2 - 0.45);
+      box(env, palette.dark, x, ledge.y / 2, -1, 0.25, ledge.y, 0.3);
+      box(env, palette.orange, x, ledge.y - 0.4, 1.25, 0.5, 0.45, 0.06);
+    }
+  }
+  // A lit front edge makes the playable floor unambiguous in the side view.
+  for (let x = -12; x < 200; x += 4) {
+    box(env, palette.steel, x, -0.13, 1.6, 3.95, 0.24, 0.2);
+    box(env, palette.fire, x, -0.07, 1.72, 2.7, 0.045, 0.03);
   }
   // Landing lights point toward the final arena.
   for (let z = -6; z <= 6; z += 3) {

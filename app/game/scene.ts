@@ -14,6 +14,7 @@ import {
   palette,
 } from './models';
 import { Simulation, type Enemy, type GameEvent } from './simulation';
+import { frameCombatCamera, aimOnCombatPlane } from './camera';
 
 type Particle = {
   p: T.Vector3;
@@ -46,6 +47,7 @@ export class GameScene {
   cameraX = 10;
   menu = true;
   marker: T.Mesh;
+  aimLine: T.Line;
   gate: T.Group;
   flash = new T.PointLight(0xff742a, 0, 20, 2);
   quality = 'high';
@@ -147,8 +149,20 @@ export class GameScene {
         depthWrite: false,
       }),
     );
-    this.marker.rotation.x = -Math.PI / 2;
+    (this.marker.material as T.MeshBasicMaterial).depthTest = false;
+    this.marker.renderOrder = 10;
     this.scene.add(this.marker);
+    this.aimLine = new T.Line(
+      new T.BufferGeometry().setFromPoints([new T.Vector3(), new T.Vector3()]),
+      new T.LineBasicMaterial({
+        color: 0x92e8cf,
+        transparent: true,
+        opacity: 0.22,
+        depthTest: false,
+      }),
+    );
+    this.aimLine.frustumCulled = false;
+    this.scene.add(this.aimLine);
     this.gate = new T.Group();
     for (let z = -7; z <= 7; z += 0.7) {
       const m = new T.Mesh(
@@ -189,45 +203,16 @@ export class GameScene {
   }
   pointerAim(x: number, y: number, sim: Simulation) {
     const rect = this.host.getBoundingClientRect();
-    this.ray.setFromCamera(
-      new T.Vector2(
-        ((x - rect.left) / rect.width) * 2 - 1,
-        (-(y - rect.top) / rect.height) * 2 + 1,
-      ),
+    // Aim exactly where the cursor crosses the side-scrolling combat plane.
+    // Assistance is applied once by the simulation, never by a second picker.
+    const hit = aimOnCombatPlane(
+      this.ray,
       this.camera,
+      ((x - rect.left) / rect.width) * 2 - 1,
+      (-(y - rect.top) / rect.height) * 2 + 1,
+      this.aim,
     );
-    let best = Infinity;
-    const hit = new T.Vector3();
-    let found = false;
-    const candidates = sim.enemies
-      .filter((e) => e.active)
-      .map((e) => ({
-        x: e.x,
-        y: e.y + (e.kind === 'drone' ? 0 : 1),
-        z: e.z,
-        r: 1.4,
-      }));
-    if (sim.boss.active)
-      candidates.push({ x: sim.boss.x - 1, y: 4.5, z: sim.boss.z, r: 3.5 });
-    for (const c of candidates) {
-      const p = new T.Vector3(c.x, c.y, c.z);
-      const point = this.ray.ray.intersectSphere(new T.Sphere(p, c.r), hit);
-      if (point) {
-        const d = point.distanceTo(this.camera.position);
-        if (d < best) {
-          best = d;
-          this.aim.copy(p);
-          found = true;
-        }
-      }
-    }
-    if (!found) {
-      this.ray.ray.intersectPlane(
-        new T.Plane(new T.Vector3(0, 1, 0), -(sim.player.y + 1.4)),
-        this.aim,
-      );
-    }
-    return { x: this.aim.x, y: this.aim.y, z: this.aim.z };
+    return hit ? { x: hit.x, y: hit.y, z: 0 } : sim.aimPoint;
   }
   burst(event: GameEvent) {
     const explosion = event.kind === 'explosion' || event.kind === 'victory',
@@ -312,6 +297,7 @@ export class GameScene {
       this.camera.lookAt(8.5, 1.8, 0);
       this.gate.visible = false;
       this.marker.visible = false;
+      this.aimLine.visible = false;
       this.boss.visible = false;
       this.rain.position.x = 10;
       this.pilot.root.visible = true;
@@ -321,6 +307,8 @@ export class GameScene {
         leg.rotation.z = 0;
       });
       this.pilot.torso.rotation.z = 0;
+      this.pilot.gun.rotation.z = 0;
+      this.pilot.gun.position.set(0.57, 0.19, 0.34);
       this.bulletMesh.count = 0;
       for (const m of this.enemies.values()) m.root.visible = false;
       for (const m of this.extras.values()) m.visible = false;
@@ -346,18 +334,23 @@ export class GameScene {
             : Math.sin(t * 16 + i * Math.PI) * p.moving * 0.7;
       this.pilot.muzzle.visible = p.flash > 0 && sim.mode === 'playing';
       this.pilot.glow.intensity = this.pilot.muzzle.visible ? 9 : 0;
-      this.pilot.gun.position.x = 0.57 - (p.flash > 0 ? 0.09 : 0);
+      this.pilot.gun.position.set(0.18 - (p.flash > 0 ? 0.07 : 0), 0.3, 0.34);
+      this.pilot.gun.rotation.z = p.aimPitch;
       this.marker.visible = sim.mode === 'playing';
-      this.marker.position.set(p.x, 0.035, p.z);
-      this.marker.scale.setScalar(p.dashTime > 0 ? 1.9 : 1.4);
-      this.cameraX = T.MathUtils.lerp(this.cameraX, p.x, 1 - Math.exp(-dt * 5));
-      const bossZoom = sim.boss.active ? 2 : 0;
-      this.camera.position.set(
-        this.cameraX - 8.5 - bossZoom,
-        11.5 + bossZoom,
-        18.5 + bossZoom,
+      this.marker.position.set(sim.aimPoint.x, sim.aimPoint.y, 0.6);
+      this.marker.scale.setScalar(sim.targetLocked ? 1.3 : 0.8);
+      (this.marker.material as T.MeshBasicMaterial).color.setHex(
+        sim.targetLocked ? 0xffdc82 : 0x92e8cf,
       );
-      this.camera.lookAt(this.cameraX + 5.4, 1.1, 0);
+      this.aimLine.visible = sim.mode === 'playing';
+      const line = this.aimLine.geometry.attributes.position;
+      line.setXYZ(0, p.x, p.y + 1.4, 0.5);
+      line.setXYZ(1, sim.aimPoint.x, sim.aimPoint.y, 0.5);
+      line.needsUpdate = true;
+      this.cameraX = T.MathUtils.lerp(this.cameraX, p.x, 1 - Math.exp(-dt * 5));
+      // Fixed side view: every fighter shares the XY plane while perspective
+      // scenery retains depth and parallax. Frame both pilot and boss on entry.
+      frameCombatCamera(this.camera, this.cameraX, sim.boss.active);
       this.camera.position.x += (Math.random() - 0.5) * this.shake;
       this.camera.position.y += (Math.random() - 0.5) * this.shake;
       this.sun.position.set(this.cameraX + 25, 40, -45);
@@ -371,7 +364,7 @@ export class GameScene {
         }
       for (const e of sim.enemies) {
         const m = this.enemyModel(e);
-        m.root.visible = Math.abs(e.x - p.x) < 42;
+        m.root.visible = e.sector === sim.sector && Math.abs(e.x - p.x) < 32;
         if (!m.root.visible) continue;
         m.root.position.set(e.x, e.y, e.z);
         m.root.rotation.y = e.kind === 'turret' ? e.angle - Math.PI : e.angle;
@@ -405,16 +398,16 @@ export class GameScene {
         this.direction.set(b.vx, b.vy, b.vz).normalize();
         this.dummy.quaternion.setFromUnitVectors(this.up, this.direction);
         this.dummy.scale.set(
-          b.friendly ? 0.04 : 0.12,
+          b.friendly ? 0.065 : 0.18,
           b.friendly ? (b.weapon === 2 ? 2.2 : 1) : 0.34,
-          b.friendly ? 0.04 : 0.12,
+          b.friendly ? 0.065 : 0.18,
         );
         this.dummy.updateMatrix();
         this.bulletMesh.setMatrixAt(bi, this.dummy.matrix);
         this.bulletMesh.setColorAt(
           bi,
           new T.Color(
-            b.friendly ? (b.weapon === 2 ? 0x9bffee : 0xffdf86) : 0xff4a20,
+            b.friendly ? (b.weapon === 2 ? 0x9bffee : 0xffdf86) : 0xff387b,
           ),
         );
         bi++;
@@ -468,12 +461,13 @@ export class GameScene {
               depthWrite: false,
             }),
           );
-          obj.rotation.x = -Math.PI / 2;
+          // Vertical warning disc, visible from the side (ground rings were edge-on).
+          obj.rotation.x = 0;
           this.extras.set(h.id, obj);
           this.scene.add(obj);
         }
-        obj.position.set(h.x, 0.045, h.z);
-        obj.scale.setScalar(h.radius * (0.8 + Math.sin(t * 18) * 0.12));
+        obj.position.set(h.x, 1.15, 0.8);
+        obj.scale.set(h.radius, 1.2 + Math.sin(t * 18) * 0.1, 1);
         obj.visible = !h.exploded;
       }
       for (const [id, obj] of this.extras)
