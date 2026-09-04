@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
 
@@ -16,6 +16,11 @@ export const metadata: Metadata = {
   title: 'ASH VECTOR — Operation Black Rain',
   description:
     'A cinematic 2.5D run-and-gun assault. Double jump, air dash, and blast through Operation Black Rain.',
+};
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
 };
 
 export default function RootLayout({

@@ -1,10 +1,5 @@
 'use client';
-import {
-  useEffect,
-  useRef,
-  useState,
-  type PointerEvent as ReactPointerEvent,
-} from 'react';
+import { useEffect, useCallback, useRef, useState } from 'react';
 import {
   ArrowUpRight,
   Maximize,
@@ -28,8 +23,12 @@ import {
 import { GameScene } from './scene';
 import { Simulation, neutralInput, weapons, type Input } from './simulation';
 import { Soundscape } from './audio';
+import { TouchControls } from './TouchControls';
+import { combatWidth } from './camera';
 
 type Snapshot = {
+  x: number;
+  y: number;
   mode: Simulation['mode'];
   hp: number;
   score: number;
@@ -53,6 +52,8 @@ type Snapshot = {
 };
 function snapshot(s: Simulation): Snapshot {
   return {
+    x: s.player.x,
+    y: s.player.y,
     mode: s.mode,
     hp: s.player.hp,
     score: s.score,
@@ -104,6 +105,10 @@ export default function Game() {
     [quality, setQuality] = useState('high');
   const [view, setView] = useState<Snapshot>(() => snapshot(new Simulation()));
   const [help, setHelp] = useState(false);
+  const [phoneMode, setPhoneMode] = useState(false);
+  const [autoFire, setAutoFire] = useState(true);
+  const autoFireRef = useRef(true);
+  const phoneModeRef = useRef(false);
   const [introOpen, setIntroOpen] = useState(false);
   const introIsOpen = useRef(false);
   const cursor = useRef<HTMLDivElement>(null);
@@ -125,6 +130,10 @@ export default function Game() {
     setView(snapshot(sim.current!));
   };
   const pause = () => {
+    keys.current.clear();
+    pointer.current.down = false;
+    control.current = neutralInput();
+    touch.current = { x: 0, fire: false };
     sim.current?.togglePause();
     if (sim.current) setView(snapshot(sim.current));
   };
@@ -145,17 +154,39 @@ export default function Game() {
       accumulator = 0;
     let running = true;
     let resize: () => void = () => {};
+    let observer: ResizeObserver | undefined;
+    const coarse = window.matchMedia('(pointer: coarse)');
+    const updatePhone = () => {
+      phoneModeRef.current = coarse.matches;
+      setPhoneMode(coarse.matches);
+    };
+    queueMicrotask(updatePhone);
+    coarse.addEventListener('change', updatePhone);
     try {
       const world = new GameScene(host.current);
       scene.current = world;
+      if (coarse.matches) {
+        world.setQuality('performance');
+        queueMicrotask(() => setQuality('performance'));
+      }
       resize = () => world.resize();
       window.addEventListener('resize', resize);
+      observer = new ResizeObserver(resize);
+      observer.observe(host.current);
       let firstFrame = true;
       const loop = (timestamp: number) => {
         if (!running) return;
         const delta = Math.min((timestamp - last) / 1000 || 1 / 60, 0.08);
         last = timestamp;
         const current = sim.current!;
+        current.viewRange =
+          combatWidth(
+            world.camera.aspect,
+            current.boss.active,
+            window.innerHeight > window.innerWidth,
+          ) *
+            0.68 -
+          0.8;
         const held = keys.current,
           input = control.current;
         input.mx =
@@ -164,8 +195,14 @@ export default function Game() {
           touch.current.x;
         input.aim = null;
         input.fire =
-          pointer.current.down || held.has('KeyJ') || touch.current.fire;
-        input.autoAim = held.has('KeyJ') || touch.current.fire;
+          pointer.current.down ||
+          held.has('KeyJ') ||
+          touch.current.fire ||
+          (phoneModeRef.current && autoFireRef.current && current.hasTarget());
+        input.autoAim =
+          held.has('KeyJ') ||
+          touch.current.fire ||
+          (phoneModeRef.current && autoFireRef.current);
         if (pointer.current.used)
           input.aim = world.pointerAim(
             pointer.current.x,
@@ -346,6 +383,8 @@ export default function Game() {
       cancelAnimationFrame(frame);
       clearInterval(poll);
       window.removeEventListener('resize', resize);
+      observer?.disconnect();
+      coarse.removeEventListener('change', updatePhone);
       window.removeEventListener('keydown', keydown);
       window.removeEventListener('keyup', keyup);
       window.removeEventListener('blur', blur);
@@ -363,21 +402,21 @@ export default function Game() {
     if (document.fullscreenElement) void document.exitFullscreen();
     else void document.documentElement.requestFullscreen().catch(() => {});
   };
-  const touchMove = (e: ReactPointerEvent<HTMLDivElement>) => {
-    const r = e.currentTarget.getBoundingClientRect();
-    touch.current.x = Math.max(
-      -1,
-      Math.min(1, (e.clientX - r.left - r.width / 2) / 35),
-    );
-  };
-  const touchAction = (key: 'jump' | 'dash' | 'grenade') => {
+  const touchAction = (key: 'jump' | 'dash' | 'grenade' | 'switchWeapon') => {
     control.current[key] = true;
   };
+  const updateTouch = useCallback((x: number, fire: boolean) => {
+    touch.current = { x, fire };
+  }, []);
   const inMission = view.mode !== 'menu',
     playing = view.mode === 'playing';
   return (
     <main
-      className={`game-shell ${inMission ? 'in-mission' : ''} ${playing ? 'is-playing' : ''}`}
+      className={`game-shell ${inMission ? 'in-mission' : ''} ${playing ? 'is-playing' : ''} ${phoneMode ? 'touch-mode' : ''}`}
+      data-mode={view.mode}
+      data-player-x={view.x.toFixed(2)}
+      data-player-y={view.y.toFixed(2)}
+      data-kills={view.kills}
     >
       <div
         className="world"
@@ -452,6 +491,12 @@ export default function Game() {
             <br />
             Bring the machine to its knees.
           </p>
+          {phoneMode && (
+            <p className="phone-intro">
+              Two thumbs. All action. Auto fire handles aiming — you run, jump
+              and dash.
+            </p>
+          )}
           <button
             className="deploy"
             disabled={!ready || !!error}
@@ -635,7 +680,25 @@ export default function Game() {
               <span>RESUME OPERATION</span>
               <Play size={21} />
             </button>
-            <div className="pause-controls">
+            {phoneMode && (
+              <div className="phone-pause-guide">
+                <p>
+                  Left thumb: move. Right thumb: jump, double jump and dash.
+                </p>
+                <p>
+                  Auto Fire aims and shoots for you. Turn it off for a
+                  hold-to-fire button. Tap the weapon name to switch, or BOMB to
+                  throw a grenade.
+                </p>
+                <p>
+                  Jump above cargo for a clear shot. Clear all hostiles to open
+                  the next sector.
+                </p>
+              </div>
+            )}
+            <div
+              className={`pause-controls ${phoneMode ? 'desktop-controls' : ''}`}
+            >
               <p>
                 <kbd>A D</kbd> Move <kbd>W S</kbd> Aim up / down{' '}
                 <kbd>SPACE</kbd> Double jump
@@ -701,48 +764,19 @@ export default function Game() {
           </div>
         </section>
       )}
-      {playing && (
-        <div className="touch-controls">
-          <div
-            className="touch-stick"
-            aria-label="Touch movement joystick"
-            onPointerDown={(e) => {
-              e.currentTarget.setPointerCapture(e.pointerId);
-              touchMove(e);
-            }}
-            onPointerMove={(e) => {
-              if (e.currentTarget.hasPointerCapture(e.pointerId)) touchMove(e);
-            }}
-            onPointerUp={() => {
-              touch.current.x = 0;
-            }}
-            onPointerCancel={() => {
-              touch.current.x = 0;
-            }}
-          >
-            <span>← MOVE →</span>
-          </div>
-          <div className="touch-actions">
-            <button onPointerDown={() => touchAction('grenade')}>E</button>
-            <button onPointerDown={() => touchAction('dash')}>DASH</button>
-            <button onPointerDown={() => touchAction('jump')}>JUMP</button>
-            <button
-              className="touch-fire"
-              onPointerDown={(e) => {
-                e.currentTarget.setPointerCapture(e.pointerId);
-                touch.current.fire = true;
-              }}
-              onPointerUp={() => {
-                touch.current.fire = false;
-              }}
-              onPointerCancel={() => {
-                touch.current.fire = false;
-              }}
-            >
-              FIRE
-            </button>
-          </div>
-        </div>
+      {playing && phoneMode && (
+        <TouchControls
+          onChange={updateTouch}
+          action={touchAction}
+          autoFire={autoFire}
+          toggleAutoFire={() => {
+            autoFireRef.current = !autoFireRef.current;
+            setAutoFire(autoFireRef.current);
+          }}
+          dash={view.dash}
+          grenades={view.grenades}
+          weapon={view.weapon}
+        />
       )}
       <footer className="game-footer">
         <div>

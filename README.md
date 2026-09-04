@@ -12,7 +12,8 @@ An original 2.5D arcade run-and-gun mission inspired by Hard Corps: Uprising's s
 - Escape / P: pause. M: mute. Enter: deploy, resume, or replay.
 - Clear every hostile to unlock each sector gate. Checkpoints restore armor and grenades. Armor repairs slowly after five seconds without damage.
 - Jump over cargo or double jump onto elevated one-way platforms. Enemy volleys spread vertically; jump or dash through the gaps. The boss's red warning discs mark missile strike zones.
-- Gamepad: left stick movement, right stick aim, RT fire, A jump, B dash, X weapon, LB grenade, Start pause. Touch controls appear on touch devices.
+- Gamepad: left stick movement, right stick aim, RT fire, A jump, B dash, X weapon, LB grenade, Start pause.
+- Phone: use the left/right thumb buttons to move and the large Jump button to jump twice. Dash is beside Jump. Auto Fire aims and shoots by default; toggle it off for manual hold-to-fire. Tap the weapon name to switch or BOMB to throw a grenade. Portrait and landscape layouts are supported, and phones start with lighter graphics.
 
 HQ/LQ changes rendering detail. Fullscreen and sound controls are in the top-right corner.
 
@@ -26,9 +27,13 @@ The Three.js scene uses physically based materials, animated procedural models, 
 
 `node tests/gameplay.test.mjs` exercises plane-constrained movement, direct drone targeting, aim assistance, vertical spread, one-way platforms, air dashes, double jump, pause, swept projectile collision, gate locking, checkpoint recovery, cover, boss phases, victory and replay, plus a complete mission driven through ordinary gameplay inputs. `npx tsc --noEmit` checks types.
 
-Automated gameplay logic tests and the production build passed. Hands-on browser playthrough, physical gamepad, and touch-device testing have not been performed.
+Automated gameplay logic tests and browser touch-emulation checks passed. The touch-driven browser mission reached victory with no deaths. Four phone viewport sizes were checked, including simultaneous touches, cancellation, rotation, abilities, and manual fire. Physical mobile hardware, Safari, and gamepad testing remain outstanding. See [the quality report](docs/quality-pass.md).
 
 `node tests/camera.test.mjs` verifies camera framing and screen-to-world drone targeting at four aspect ratios, firing through the actual simulation after converting projected cursor positions back into aim points. These numerical checks do not replace visual browser testing.
+
+`node tests/phone.test.mjs` covers independent touch tracking, buffered jumps, unobstructed automatic targeting, and the one-time sector reward.
+
+Browser regression scripts are `tests/browser-phone.mjs` and `tests/browser-desktop.mjs`. Start the standalone dev server on `127.0.0.1:5173`, open a dedicated agent-browser session, and pass its `get cdp-url` websocket URL as the first script argument. The phone script supports `--quick` to skip the sustained mission; it still exercises layouts, multi-touch, abilities, rotation, and pause. Screenshots are written to the ignored `outputs/` directory.
 
 The starter component catalog has existing lint findings outside the game. The game, route, layout, and tests pass scoped lint with `npx oxlint app/game app/page.tsx app/layout.tsx tests`.
 

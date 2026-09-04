@@ -163,6 +163,9 @@ export class Simulation {
   enemies: Enemy[] = [];
   aimPoint: Vec = { x: 25, y: 1.4, z: 0 };
   targetLocked = false;
+  viewRange = 18;
+  private jumpBuffer = 0;
+  private announcedClear = -1;
   bullets: Bullet[] = [];
   grenades: Grenade[] = [];
   hazards: Hazard[] = [];
@@ -231,6 +234,16 @@ export class Simulation {
   }
   remaining() {
     return this.enemies.filter((e) => e.sector === this.sector).length;
+  }
+  hasTarget() {
+    return this.enemies.some((e) => e.active && e.hp > 0) || this.boss.active;
+  }
+  clearShot(target: Vec) {
+    const origin = { ...this.player, y: this.player.y + 1.4 };
+    return !cover.some((c) => {
+      const t = (c.x - origin.x) / (target.x - origin.x || 0.001);
+      return t > 0 && t < 1 && origin.y + (target.y - origin.y) * t < 1.4;
+    });
   }
   emit(kind: GameEvent['kind'], p: Vec, size = 1, weapon = 0) {
     this.events.push({ kind, x: p.x, y: p.y, z: p.z, size, weapon });
@@ -319,7 +332,11 @@ export class Simulation {
     if (this.boss.active)
       candidates.push({ x: this.boss.x - 1.4, y: 4.5, z: this.boss.z });
     if (input.autoAim) {
-      candidates.sort((a, b) => dist(a, origin) - dist(b, origin));
+      candidates.sort(
+        (a, b) =>
+          Number(this.clearShot(b)) - Number(this.clearShot(a)) ||
+          dist(a, origin) - dist(b, origin),
+      );
       if (candidates.length && dist(candidates[0], origin) < 23) {
         this.targetLocked = true;
         return candidates[0];
@@ -372,6 +389,7 @@ export class Simulation {
     if (this.mode !== 'playing') return;
     dt = Math.min(dt, 1 / 30);
     this.time += dt;
+    this.jumpBuffer = input.jump ? 0.14 : Math.max(0, this.jumpBuffer - dt);
     this.noticeTime = Math.max(0, this.noticeTime - dt);
     this.comboTime -= dt;
     if (this.comboTime <= 0) this.combo = 0;
@@ -388,7 +406,8 @@ export class Simulation {
     if (!input.aim && !input.autoAim && len > 0.1)
       p.angle = dx < 0 ? Math.PI : 0;
     if (input.switchWeapon) p.weapon = (p.weapon + 1) % 3;
-    if (input.jump && p.jumps < 2) {
+    if (this.jumpBuffer > 0 && p.jumps < 2) {
+      this.jumpBuffer = 0;
       p.vy = p.jumps === 0 ? 10 : 8.7;
       p.jumps++;
       this.emit('jump', p);
@@ -472,7 +491,10 @@ export class Simulation {
     }
     for (const e of this.enemies) {
       e.flash = Math.max(0, e.flash - dt);
-      e.active = e.sector === this.sector && e.x < p.x + 18;
+      e.active =
+        e.sector === this.sector &&
+        e.x < p.x + this.viewRange &&
+        e.x > p.x - this.viewRange;
       if (!e.active) continue;
       const flat = Math.hypot(p.x - e.x, p.z - e.z);
       e.angle = Math.atan2(-(p.z - e.z), p.x - e.x);
@@ -628,6 +650,17 @@ export class Simulation {
     }
     this.bullets = this.bullets.filter((b) => b.life > 0);
     this.enemies = this.enemies.filter((e) => e.hp > 0);
+    if (
+      this.sector < 3 &&
+      this.remaining() === 0 &&
+      this.announcedClear !== this.sector
+    ) {
+      this.announcedClear = this.sector;
+      this.notice = 'SECTOR CLEAR // ADVANCE →';
+      this.noticeTime = 2.4;
+      this.score += 500;
+      this.emit('sector', p);
+    }
     for (const h of this.hazards) {
       h.timer -= dt;
       if (h.timer <= 0 && !h.exploded) {

@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import * as T from 'three';
-import { frameCombatCamera, aimOnCombatPlane } from '../app/game/camera.ts';
+import {
+  frameCombatCamera,
+  aimOnCombatPlane,
+  combatWidth,
+} from '../app/game/camera.ts';
 import {
   Simulation,
   neutralInput,
@@ -10,7 +14,10 @@ import {
 for (const aspect of [16 / 9, 4 / 3, 9 / 16, 21 / 9]) {
   const camera = new T.PerspectiveCamera(48, aspect, 0.1, 400);
   frameCombatCamera(camera, 20, false);
-  for (const point of [new T.Vector3(20, 1.4, 0), new T.Vector3(34, 5.1, 0)]) {
+  for (const point of [
+    new T.Vector3(20, 1.4, 0),
+    new T.Vector3(20 + combatWidth(aspect) * 0.45, 5.1, 0),
+  ]) {
     const screen = point.clone().project(camera);
     assert(
       Math.abs(screen.x) < 1 && Math.abs(screen.y) < 1,
@@ -42,7 +49,7 @@ for (const aspect of [16 / 9, 4 / 3, 9 / 16, 21 / 9]) {
   sim.start();
   sim.enemies = sim.enemies.filter((e) => e.kind === 'drone').slice(0, 1);
   const drone = sim.enemies[0];
-  drone.x = 23;
+  drone.x = 20;
   frameCombatCamera(camera, sim.player.x, false);
   for (let frame = 0; frame < 90 && !sim.kills; frame++) {
     const c = enemyCenter(drone);

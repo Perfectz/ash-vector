@@ -350,7 +350,12 @@ export class GameScene {
       this.cameraX = T.MathUtils.lerp(this.cameraX, p.x, 1 - Math.exp(-dt * 5));
       // Fixed side view: every fighter shares the XY plane while perspective
       // scenery retains depth and parallax. Frame both pilot and boss on entry.
-      frameCombatCamera(this.camera, this.cameraX, sim.boss.active);
+      frameCombatCamera(
+        this.camera,
+        this.cameraX,
+        sim.boss.active,
+        window.innerHeight > window.innerWidth,
+      );
       this.camera.position.x += (Math.random() - 0.5) * this.shake;
       this.camera.position.y += (Math.random() - 0.5) * this.shake;
       this.sun.position.set(this.cameraX + 25, 40, -45);

@@ -1,4 +1,6 @@
 import * as T from 'three';
+export const combatWidth = (aspect: number, boss = false, portrait = false) =>
+  Math.max(13.5 * aspect, boss || (aspect >= 1 && !portrait) ? 27 : 17.5);
 
 // Kept separate from WebGL so framing and screen-to-world aiming can be verified
 // against the same camera used in the game, without a browser or GPU.
@@ -6,9 +8,10 @@ export function frameCombatCamera(
   camera: T.PerspectiveCamera,
   trackedX: number,
   boss: boolean,
+  portrait = false,
 ) {
-  const height = Math.max(13.5, 27 / camera.aspect);
-  const width = height * camera.aspect;
+  const width = combatWidth(camera.aspect, boss, portrait);
+  const height = width / camera.aspect;
   const focusX = boss ? 169 : trackedX + Math.min(5, width * 0.18);
   camera.position.set(
     focusX,

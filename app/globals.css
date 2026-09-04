@@ -1010,65 +1010,6 @@ kbd {
     top: 185px;
   }
 }
-@media (pointer: coarse) {
-  .touch-controls {
-    display: flex;
-    position: absolute;
-    bottom: 70px;
-    left: 5%;
-    right: 5%;
-    justify-content: space-between;
-    align-items: flex-end;
-    pointer-events: none;
-  }
-  .touch-stick {
-    width: 114px;
-    height: 114px;
-    border-radius: 50%;
-    background: #0b1c2359;
-    border: 2px solid #d6eeea42;
-    box-shadow: inset 0 0 0 28px #b9dad014;
-    display: grid;
-    place-items: center;
-    color: #c6d8d2;
-    font-size: 10px;
-    letter-spacing: 2px;
-    pointer-events: auto;
-    touch-action: none;
-  }
-  .touch-actions {
-    display: flex;
-    gap: 9px;
-    align-items: center;
-  }
-  .touch-actions button {
-    height: 49px;
-    width: 49px;
-    border-radius: 50%;
-    background: #1a2e399e;
-    border: 1px solid #abc4cd5c;
-    font-size: 9px;
-    pointer-events: auto;
-    touch-action: none;
-  }
-  .touch-actions .touch-fire {
-    height: 76px;
-    width: 76px;
-    background: #df6a31a6;
-    border-color: #ffb19c;
-    font-size: 12px;
-    font-weight: 800;
-  }
-  .is-playing .loadout {
-    bottom: 208px;
-  }
-  .is-playing .ability-hud {
-    bottom: 205px;
-  }
-  .crosshair {
-    display: none !important;
-  }
-}
 @media (max-width: 600px) {
   .player-hud {
     left: 5%;
@@ -1282,4 +1223,124 @@ kbd {
 }
 .intro-dialog [data-slot='dialog-description'] {
   color: #a6bfc3;
+}
+
+/* Phone controls: separate thumb zones, with the battlefield between them. */
+.phone-intro { max-width: 330px; color: #acdacf; font-size: 12px; line-height: 1.6; }
+.touch-mode { height: 100dvh; touch-action: none; overscroll-behavior: none; user-select: none; }
+.touch-mode .desktop-controls, .touch-mode .operator-line small { display: none; }
+.phone-pause-guide { text-align: left; font-size: 13px; line-height: 1.6; color: #b6ccce; }
+.touch-mode .game-header { padding-left: max(16px, env(safe-area-inset-left)); padding-right: max(16px, env(safe-area-inset-right)); }
+.touch-mode .utilities button { width: 44px; height: 44px; }
+.touch-mode .crosshair, .touch-mode .game-footer, .touch-mode .loadout, .touch-mode .ability-hud { display: none; }
+.touch-mode .touch-controls { display: block; position: absolute; z-index: 12; inset: auto max(14px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left)); height: 190px; pointer-events: none; }
+.touch-controls button { pointer-events: auto; touch-action: none; -webkit-tap-highlight-color: transparent; border: 1px solid #b1d8d35c; background: #0d2531ed; color: #e3eeeb; border-radius: 16px; font: 700 10px var(--font-geist-mono), monospace; min-height: 48px; box-shadow: 0 5px 16px #0004; }
+.touch-controls button[data-pressed=true] { transform: scale(.94); background: #32776f; border-color: #b5ffea; }
+.touch-controls button:disabled { opacity: .55; }
+.touch-toolbar { position: absolute; inset: 0 0 auto; display: flex; gap: 7px; pointer-events: auto; }
+.touch-toolbar button { flex: 1; padding: 0 8px; white-space: nowrap; border-radius: 12px; }
+.touch-toolbar b { font-size: 12px; margin-left: 3px; }
+.touch-toolbar .auto-fire { flex: 1.4; }
+.auto-fire.enabled { background: #123c38; color: #a0ffcf; border-color: #60d8ab80; }
+.auto-fire i { display: inline-block; width: 5px; height: 5px; border-radius: 50%; margin-right: 5px; background: currentColor; }
+.touch-directions { position: absolute; left: 0; bottom: 14px; display: grid; grid-template-columns: 64px 64px; gap: 8px; }
+.touch-directions button { width: 64px; height: 72px; font: 28px Arial, sans-serif; }
+.touch-directions span { position: absolute; width: 100%; bottom: -17px; text-align: center; font: 8px var(--font-geist-mono), monospace; letter-spacing: 2px; color: #85a7ad; }
+.touch-abilities { position: absolute; right: 0; bottom: 7px; width: 166px; height: 108px; }
+.touch-abilities button { position: absolute; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 3px; }
+.touch-abilities button b { font: 27px Arial, sans-serif; }
+.touch-abilities .touch-jump { width: 84px; height: 84px; right: 0; bottom: 0; border-radius: 50%; background: #e46835; border: 2px solid #ffb794; color: #101b20; }
+.touch-abilities .touch-dash { width: 64px; height: 64px; left: 5px; top: 0; border-radius: 50%; }
+.touch-abilities.manual { width: 178px; height: 126px; }
+.touch-mode .touch-abilities.manual { height: 126px; }
+.touch-abilities.manual .touch-jump { width: 66px; height: 66px; right: 0; top: 0; }
+.touch-abilities.manual .touch-dash { left: 22px; top: 0; width: 56px; height: 56px; }
+.touch-abilities .touch-fire { width: 72px; height: 56px; right: 6px; bottom: 0; border-radius: 16px; background: #955b29; }
+.touch-mode .state-overlay { overflow-y: auto; padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom)); }
+.touch-mode .state-panel { margin: auto; max-height: 95dvh; overflow-y: auto; }
+.touch-mode .help-sheet { max-height: 80dvh; overflow-y: auto; }
+@media (orientation: portrait) {
+  .touch-mode.in-mission .world { top: calc(126px + env(safe-area-inset-top)); bottom: calc(208px + env(safe-area-inset-bottom)); height: auto; }
+  .touch-mode.in-mission .world canvas { height: 100%; }
+  .touch-mode.in-mission .cinema-shade { background: linear-gradient(#06131c 115px, transparent 145px, transparent calc(100% - 228px), #06131c calc(100% - 204px)); }
+  .touch-mode .game-header, .touch-mode.in-mission .game-header { height: calc(58px + env(safe-area-inset-top)); padding-top: env(safe-area-inset-top); }
+  .touch-mode .wordmark { font-size: 10px; gap: 6px; letter-spacing: 1px; }
+  .touch-mode .wordmark .brand-symbol { font-size: 26px; }
+  .touch-mode .utilities { gap: 0; }
+  .touch-mode .quality-button { display: none; }
+  .touch-mode .player-hud { top: calc(67px + env(safe-area-inset-top)); left: 16px; width: 143px; }
+  .touch-mode .objective-hud { top: calc(64px + env(safe-area-inset-top)); right: 16px; width: 157px; }
+  .touch-mode .objective-hud h2 { font-size: 10px; margin: 5px 0; }
+  .touch-mode .objective-eyebrow { font-size: 7px; }
+  .touch-mode .route-line { display: none; }
+  .touch-mode .boss-hud { top: calc(124px + env(safe-area-inset-top)); width: 75%; }
+  .touch-mode .boss-hud > div { margin-top: 3px; }
+  .touch-mode .mission-notice { top: calc(165px + env(safe-area-inset-top)); width: 90%; }
+  .touch-mode .mission-notice > span { font-size: 8px; }
+  .touch-mode .mission-notice p { padding: 8px; font-size: 9px; }
+  .touch-mode .combo { top: auto; bottom: calc(211px + env(safe-area-inset-bottom)); left: 16px; }
+  .touch-mode .combo > b { font-size: 24px; }
+  .touch-mode .title-screen { top: max(calc(105px + env(safe-area-inset-top)), 15dvh); left: 7%; }
+  .touch-mode .title-screen h1 { font-size: clamp(65px, 20vw, 108px); }
+  .touch-mode .mission-meta { display: none; }
+  .touch-mode .intro { font-size: 14px; margin-bottom: 8px; }
+  .touch-mode .phone-intro { max-width: 280px; margin-bottom: 20px; }
+  .touch-mode .deploy { min-width: 0; width: min(300px, 86vw); }
+}
+@media (orientation: landscape) and (max-height: 600px) {
+  .touch-mode .game-header, .touch-mode.in-mission .game-header { height: 48px; }
+  .touch-mode .wordmark { font-size: 10px; }
+  .touch-mode .header-status { display: none; }
+  .touch-mode .player-hud { top: 54px; left: max(18px, env(safe-area-inset-left)); width: 165px; }
+  .touch-mode .objective-hud { top: 53px; right: max(18px, env(safe-area-inset-right)); width: 190px; }
+  .touch-mode .objective-hud h2 { font-size: 11px; margin: 4px 0; }
+  .touch-mode .objective-hud p, .touch-mode .objective-eyebrow { font-size: 8px; }
+  .touch-mode .route-line, .touch-mode .hud-subline > span:not(.score) { display: none; }
+  .touch-mode .operator-line { font-size: 8px; }
+  .touch-mode .operator-line b { font-size: 19px; }
+  .touch-mode .boss-hud { top: 53px; width: 30%; }
+  .touch-mode .boss-hud span { font-size: 9px; }
+  .touch-mode .mission-notice { top: 112px; width: 45%; min-width: 0; }
+  .touch-mode .mission-notice p { padding: 7px; font-size: 8px; }
+  .touch-mode .mission-notice > span { font-size: 7px; }
+  .touch-mode .combo { top: 109px; left: 18px; }
+  .touch-mode .combo > b { font-size: 24px; }
+  .touch-mode .touch-controls { height: 120px; bottom: max(8px, env(safe-area-inset-bottom)); }
+  .touch-mode .touch-toolbar { left: 156px; right: 180px; top: auto; bottom: 0; gap: 5px; }
+  .touch-mode .touch-toolbar button { font-size: 8px; padding: 0 5px; min-height: 44px; }
+  .touch-mode .touch-toolbar b { font-size: 10px; }
+  .touch-mode .title-screen { top: 61px; bottom: 12px; left: 6%; display: grid; grid-template-columns: 250px 230px; gap: 0 28px; align-content: center; max-width: 90vw; }
+  .touch-mode .title-screen .eyebrow { grid-column: 1 / -1; font-size: 8px; }
+  .touch-mode .title-screen h1 { grid-column: 1; grid-row: 2 / 6; font-size: 68px; margin: 10px 0; }
+  .touch-mode .title-screen .intro { grid-column: 2; margin: 10px 0 3px; font-size: 11px; }
+  .touch-mode .phone-intro { grid-column: 2; font-size: 10px; margin: 3px 0 8px; }
+  .touch-mode .title-screen .deploy { grid-column: 2; min-width: 0; padding: 13px; font-size: 10px; }
+  .touch-mode .watch-intro { grid-column: 2; margin-top: 9px; }
+  .touch-mode .mission-meta, .touch-mode .scene-caption { display: none; }
+}
+@media (orientation: portrait) and (max-height: 700px) {
+  .touch-mode.in-mission .world { top: calc(115px + env(safe-area-inset-top)); bottom: calc(210px + env(safe-area-inset-bottom)); }
+  .touch-mode .touch-controls { height: 190px; }
+  .touch-mode .touch-toolbar button { min-height: 44px; }
+  .touch-mode .touch-directions { bottom: 4px; }
+  .touch-mode .touch-directions button { height: 64px; }
+  .touch-mode .touch-abilities { bottom: 0; height: 94px; }
+  .touch-mode .title-screen { top: 87px; }
+  .touch-mode .title-screen h1 { font-size: 66px; margin: 12px 0; }
+}
+
+@media (max-width: 350px) {
+  .touch-mode .touch-directions { grid-template-columns: 58px 58px; gap: 6px; }
+  .touch-mode .touch-directions button { width: 58px; }
+  .touch-mode .touch-abilities, .touch-mode .touch-abilities.manual { width: 150px; }
+  .touch-mode .touch-abilities .touch-dash { left: 0; width: 58px; height: 58px; }
+  .touch-mode .touch-abilities .touch-jump { width: 78px; height: 78px; }
+  .touch-mode .touch-abilities.manual .touch-jump { width: 66px; height: 66px; }
+  .touch-mode .touch-toolbar button { font-size: 8px; padding: 0 4px; }
+  .touch-mode .touch-toolbar b { font-size: 10px; }
+  .touch-mode .player-hud { width: 128px; }
+  .touch-mode .objective-hud { width: 128px; }
+  .touch-mode .objective-hud p { font-size: 8px; }
+  .touch-mode .utilities button { width: 44px; }
+  .touch-mode .in-mission .wordmark { letter-spacing: 0; }
 }
