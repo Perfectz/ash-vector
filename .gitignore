@@ -38,3 +38,8 @@ next-env.d.ts
 /work/
 
 *.tsbuildinfo
+/dist-vercel/
+/videos/**/node_modules/
+/videos/**/.hyperframes/
+/videos/**/output/
+/videos/**/out.mp4
