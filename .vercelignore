@@ -1,0 +1,8 @@
+videos
+outputs
+.openai
+.wrangler
+dist
+dist-vercel
+tests
+*.tsbuildinfo

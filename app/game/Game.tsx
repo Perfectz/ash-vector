@@ -19,6 +19,12 @@ import {
   Zap,
 } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
 import { GameScene } from './scene';
 import { Simulation, neutralInput, weapons, type Input } from './simulation';
 import { Soundscape } from './audio';
@@ -98,6 +104,8 @@ export default function Game() {
     [quality, setQuality] = useState('high');
   const [view, setView] = useState<Snapshot>(() => snapshot(new Simulation()));
   const [help, setHelp] = useState(false);
+  const [introOpen, setIntroOpen] = useState(false);
+  const introIsOpen = useRef(false);
   const cursor = useRef<HTMLDivElement>(null);
   const deploy = () => {
     const s = sim.current;
@@ -226,6 +234,7 @@ export default function Game() {
       if (code === 'KeyQ') control.current.switchWeapon = true;
     };
     const keydown = (e: KeyboardEvent) => {
+      if (introIsOpen.current) return;
       if (
         ['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(
           e.code,
@@ -445,6 +454,15 @@ export default function Game() {
                   : 'INITIALIZING'}
             </span>
             <ArrowUpRight size={24} />
+          </button>
+          <button
+            className="watch-intro"
+            onClick={() => {
+              introIsOpen.current = true;
+              setIntroOpen(true);
+            }}
+          >
+            <Play size={14} /> WATCH INTRO <span>00:20</span>
           </button>
           {error && (
             <p className="error">
@@ -763,6 +781,40 @@ export default function Game() {
           </small>
         </aside>
       )}
+      <Dialog
+        open={introOpen}
+        onOpenChange={(open) => {
+          introIsOpen.current = open;
+          setIntroOpen(open);
+        }}
+      >
+        <DialogContent className="intro-dialog">
+          <DialogTitle>OPERATION BLACK RAIN</DialogTitle>
+          <DialogDescription>
+            ASH VECTOR — cinematic introduction
+          </DialogDescription>
+          {introOpen && (
+            <video
+              controls
+              autoPlay
+              playsInline
+              preload="metadata"
+              src="/media/ash-vector-intro.mp4"
+              aria-label="ASH VECTOR cinematic introduction"
+            >
+              <track
+                kind="captions"
+                src="/media/intro.en.vtt"
+                srcLang="en"
+                label="English"
+              />
+            </video>
+          )}
+          <a href="/media/ash-vector-intro.mp4" download>
+            Download intro video
+          </a>
+        </DialogContent>
+      </Dialog>
     </main>
   );
 }

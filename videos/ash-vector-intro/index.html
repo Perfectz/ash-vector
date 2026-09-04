@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/><meta name="viewport" content="width=1920,height=1080"/>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+<style>
+@font-face{font-family:'Archivo Black';src:url('assets/ArchivoBlack-Regular.ttf')}@font-face{font-family:'IBM Plex Mono';src:url('assets/IBMPlexMono-Regular.ttf')}
+*{box-sizing:border-box;margin:0;padding:0}html,body{width:1920px;height:1080px;overflow:hidden;background:#091317;color:#eeeade}#intro{width:1920px;height:1080px;position:relative;overflow:hidden}#cinema{display:block;position:absolute;inset:0;width:1920px;height:1080px}.matte{position:absolute;left:0;right:0;background:#091317;z-index:4}.matte.top{top:0;height:76px}.matte.bottom{bottom:0;height:82px}.header{height:76px;padding:0 84px;display:flex;align-items:center;justify-content:space-between;font:22px 'IBM Plex Mono',monospace;letter-spacing:4px;position:absolute;inset:0 0 auto;z-index:5}.header strong{font-weight:700;color:#f4653c}.footer{position:absolute;bottom:0;height:82px;left:84px;right:84px;display:flex;align-items:center;justify-content:space-between;font:20px 'IBM Plex Mono',monospace;letter-spacing:3px;z-index:5}.caption{position:absolute;bottom:144px;left:84px;z-index:3;padding:23px 30px;background:#091317e8;border-top:2px solid #f4653c;min-width:500px}.caption .label{font:22px 'IBM Plex Mono',monospace;letter-spacing:4px;color:#f4653c;margin-bottom:12px}.caption h2{font:400 56px 'Archivo Black',sans-serif;letter-spacing:-1px}.caption p{font:24px 'IBM Plex Mono',monospace;color:#adc2c8;margin-top:15px}.clip{position:absolute;inset:0;width:1920px;height:1080px}.closing-shade{position:absolute;inset:0;background:#091317}.closing{height:1080px;display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;gap:24px;padding:80px}.closing .strap{font:24px 'IBM Plex Mono',monospace;color:#f4653c;letter-spacing:8px}.closing h1{font:400 178px 'Archivo Black',sans-serif;letter-spacing:-9px;line-height:1.15;white-space:nowrap}.closing .sub{font:28px 'IBM Plex Mono',monospace;letter-spacing:8px;color:#eeeade}.rule{height:3px;width:180px;background:#f4653c;margin-top:14px}.stamp{font:20px 'IBM Plex Mono',monospace;letter-spacing:5px;color:#adc2c8;margin-top:18px}
+</style>
+</head>
+<body>
+<div id="intro" data-composition-id="intro" data-start="0" data-duration="20" data-width="1920" data-height="1080">
+<canvas id="cinema" width="1920" height="1080" data-layout-ignore></canvas>
+<div class="matte top" data-layout-ignore></div><div class="matte bottom" data-layout-ignore></div>
+<div class="header"><strong>Λ / ASH VECTOR</strong><span>OPERATION BLACK RAIN</span></div>
+<div class="footer"><span>SECTOR 09 / THE CITADEL</span><span id="signal">SIGNAL ACQUIRED</span></div>
+<div id="approach" class="clip" data-start="0" data-duration="6" data-track-index="1"><div class="caption" id="caption-one"><div class="label">840 METRES ABOVE THE CITY</div><h2>THE CITADEL</h2><p>The last route into the machine.</p></div></div>
+<div id="operative" class="clip" data-start="6" data-duration="6" data-track-index="1"><div class="caption" id="caption-two"><div class="label">ONE OPERATIVE</div><h2>NO WAY BACK.</h2><p>Break through. Keep moving.</p></div></div>
+<div id="manticore" class="clip" data-start="12" data-duration="4.5" data-track-index="1"><div class="caption" id="caption-three"><div class="label">SIEGE ENGINE / ONLINE</div><h2>MANTICORE</h2><p>Bring the machine to its knees.</p></div></div>
+<div id="brand" class="clip" data-start="16.5" data-duration="3.5" data-track-index="1"><div class="closing-shade" id="closing-shade" data-layout-ignore></div><div class="closing"><div id="strap" class="strap">OPERATION 01 / BLACK RAIN</div><h1 id="brand-title">ASH VECTOR</h1><div id="sub" class="sub">DEPLOY. BREAK THE LINE.</div><div id="rule" class="rule" data-layout-ignore></div><div id="stamp" class="stamp">A FULLY 3D ARCADE ASSAULT</div></div></div>
+<audio id="score" src="assets/score.wav" data-start="0" data-duration="20" data-track-index="2" data-volume="0.8"></audio>
+</div>
+<script type="module" src="assets/scene.js"></script>
+<script>
+const tl=gsap.timeline({paused:true});
+for(const [selector,t] of [['#caption-one',0],['#caption-two',6],['#caption-three',12]]){
+ tl.fromTo(selector,{x:-45,opacity:0},{x:0,opacity:1,duration:.65,ease:'power3.out',immediateRender:false},t+.35);
+ tl.to(selector,{x:20,opacity:0,duration:.3,ease:'power2.in'},t+(t===12?4.1:5.6));
+}
+tl.fromTo('#closing-shade',{opacity:0},{opacity:.83,duration:.5,ease:'power2.out',immediateRender:false},16.5);
+tl.fromTo('#brand-title',{scale:1.14,opacity:0},{scale:1,opacity:1,duration:.8,ease:'expo.out',immediateRender:false},16.65);
+tl.fromTo('#strap',{y:-20,opacity:0},{y:0,opacity:1,duration:.5,ease:'power3.out',immediateRender:false},16.8);
+tl.fromTo('#sub',{y:20,opacity:0},{y:0,opacity:1,duration:.6,ease:'power2.out',immediateRender:false},17.1);
+tl.fromTo('#rule',{scaleX:0},{scaleX:1,duration:.6,ease:'power3.inOut',immediateRender:false},17.3);
+tl.fromTo('#stamp',{opacity:0},{opacity:1,duration:.5,immediateRender:false},17.6);
+window.__timelines['intro']=tl;
+</script>
+</body>
+</html>
+

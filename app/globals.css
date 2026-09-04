@@ -1235,3 +1235,51 @@ kbd {
 .wordmark:focus-visible {
   outline-offset: 8px;
 }
+.watch-intro {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  background: none;
+  color: #d5e0da;
+  letter-spacing: 2px;
+  font:
+    11px var(--font-geist-mono),
+    monospace;
+  padding: 15px 0 0;
+}
+.watch-intro:hover {
+  color: #ff9c77;
+}
+.watch-intro span {
+  color: #90a9af;
+  margin-left: 7px;
+  font-size: 10px;
+}
+.intro-dialog {
+  width: min(1200px, 94vw) !important;
+  max-width: min(1200px, 94vw) !important;
+  background: #091317 !important;
+  color: #eeeade;
+  border: 1px solid #496069;
+  border-radius: 0 !important;
+  padding: 24px !important;
+}
+.intro-dialog video {
+  display: block;
+  width: 100%;
+  max-height: 75vh;
+  background: #091317;
+}
+.intro-dialog a {
+  color: #f99c79;
+  font-size: 13px;
+  text-decoration: underline;
+}
+.intro-dialog [data-slot='dialog-title'] {
+  font-size: 16px;
+  letter-spacing: 2px;
+}
+.intro-dialog [data-slot='dialog-description'] {
+  color: #a6bfc3;
+}

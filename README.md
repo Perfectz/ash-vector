@@ -28,3 +28,13 @@ The Three.js scene uses physically based materials, animated procedural models, 
 Automated gameplay logic tests and the production build passed. Hands-on browser playthrough, physical gamepad, and touch-device testing have not been performed.
 
 The starter component catalog has existing lint findings outside the game. The game, route, layout, and tests pass scoped lint with `npx oxlint app/game app/page.tsx app/layout.tsx tests`.
+
+## Public links
+
+- Play: https://ash-vector.vercel.app
+- GitHub: https://github.com/Perfectz/ash-vector
+- Intro video: https://ash-vector.vercel.app/media/ash-vector-intro.mp4
+
+Vercel is connected to this repository. The standalone Vercel build uses `npm run build:vercel` and shares the game's existing components and simulation. The original Sites build remains available through `npm run build`.
+
+The title screen has a Watch intro button with a 20-second 1080p cinematic and optional English closed captions. Editable HyperFrames source, camera choreography, original audio synthesis, and font licenses live in `videos/ash-vector-intro/`.
