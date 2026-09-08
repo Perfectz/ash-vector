@@ -25,6 +25,7 @@ import { Simulation, neutralInput, weapons, type Input } from './simulation';
 import { Soundscape } from './audio';
 import { TouchControls } from './TouchControls';
 import { combatWidth } from './camera';
+import { characterStyleKey, type CharacterStyle } from './sprite';
 
 type Snapshot = {
   x: number;
@@ -105,6 +106,20 @@ export default function Game() {
     [quality, setQuality] = useState('high');
   const [view, setView] = useState<Snapshot>(() => snapshot(new Simulation()));
   const [help, setHelp] = useState(false);
+  const [characterStyle, setCharacterStyle] = useState<CharacterStyle>('3d');
+  const [spriteStatus, setSpriteStatus] = useState<
+    'loading' | 'ready' | 'error'
+  >('loading');
+  const chooseCharacter = (style: CharacterStyle) => {
+    if (style === '2d' && spriteStatus !== 'ready') return;
+    setCharacterStyle(style);
+    if (scene.current) scene.current.characterStyle = style;
+    try {
+      localStorage.setItem(characterStyleKey, style);
+    } catch {
+      /* Optional preference storage. */
+    }
+  };
   const [phoneMode, setPhoneMode] = useState(false);
   const [autoFire, setAutoFire] = useState(true);
   const autoFireRef = useRef(true);
@@ -165,6 +180,22 @@ export default function Game() {
     try {
       const world = new GameScene(host.current);
       scene.current = world;
+      void world.spritePilot.readyPromise
+        .then(() => {
+          if (!running) return;
+          setSpriteStatus('ready');
+          try {
+            if (localStorage.getItem(characterStyleKey) === '2d') {
+              world.characterStyle = '2d';
+              setCharacterStyle('2d');
+            }
+          } catch {
+            /* The selector also works when storage is blocked. */
+          }
+        })
+        .catch(() => {
+          if (running) setSpriteStatus('error');
+        });
       if (coarse.matches) {
         world.setQuality('performance');
         queueMicrotask(() => setQuality('performance'));
@@ -410,6 +441,37 @@ export default function Game() {
   }, []);
   const inMission = view.mode !== 'menu',
     playing = view.mode === 'playing';
+  const characterPicker = (
+    <fieldset className="character-picker">
+      <legend>CHARACTER STYLE</legend>
+      <div className="character-options">
+        <button
+          type="button"
+          aria-pressed={characterStyle === '3d'}
+          onClick={() => chooseCharacter('3d')}
+        >
+          <strong>3D MODEL</strong>
+          <span>Original operative</span>
+        </button>
+        <button
+          type="button"
+          aria-pressed={characterStyle === '2d'}
+          disabled={spriteStatus !== 'ready'}
+          onClick={() => chooseCharacter('2d')}
+        >
+          <strong>2D SPRITE</strong>
+          <span>
+            {spriteStatus === 'loading'
+              ? 'Loading artwork…'
+              : spriteStatus === 'error'
+                ? 'Unavailable — reload to retry'
+                : 'Anime operative'}
+          </span>
+        </button>
+      </div>
+      <p>Same arsenal. Your style.</p>
+    </fieldset>
+  );
   return (
     <main
       className={`game-shell ${inMission ? 'in-mission' : ''} ${playing ? 'is-playing' : ''} ${phoneMode ? 'touch-mode' : ''}`}
@@ -417,6 +479,7 @@ export default function Game() {
       data-player-x={view.x.toFixed(2)}
       data-player-y={view.y.toFixed(2)}
       data-kills={view.kills}
+      data-character-style={characterStyle}
     >
       <div
         className="world"
@@ -497,6 +560,7 @@ export default function Game() {
               and dash.
             </p>
           )}
+          {characterPicker}
           <button
             className="deploy"
             disabled={!ready || !!error}
@@ -676,6 +740,7 @@ export default function Game() {
             <div className="eyebrow">MISSION SUSPENDED</div>
             <h2>HOLD POSITION.</h2>
             <p>Take a breath. The city can wait.</p>
+            {characterPicker}
             <button className="deploy" onClick={deploy}>
               <span>RESUME OPERATION</span>
               <Play size={21} />

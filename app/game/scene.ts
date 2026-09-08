@@ -15,6 +15,7 @@ import {
 } from './models';
 import { Simulation, type Enemy, type GameEvent } from './simulation';
 import { frameCombatCamera, aimOnCombatPlane } from './camera';
+import { SpriteOperative, type CharacterStyle } from './sprite';
 
 type Particle = {
   p: T.Vector3;
@@ -32,6 +33,8 @@ export class GameScene {
   composer: EffectComposer;
   bloom: UnrealBloomPass;
   pilot = operative();
+  spritePilot = new SpriteOperative();
+  characterStyle: CharacterStyle = '3d';
   boss = siegeMech();
   sun = new T.DirectionalLight(0xffc49a, 3.5);
   aim = new T.Vector3(20, 1.5, 0);
@@ -96,6 +99,7 @@ export class GameScene {
     this.pilot.root.position.set(10, 0, 2);
     this.pilot.root.scale.setScalar(1.18);
     this.scene.add(this.pilot.root);
+    this.scene.add(this.spritePilot.root);
     this.boss.position.set(177, 0, 0);
     this.scene.add(this.boss);
     this.particleMesh = new T.InstancedMesh(
@@ -482,6 +486,17 @@ export class GameScene {
         }
       this.rain.position.x = this.cameraX;
     }
+    const useSprite = this.characterStyle === '2d' && this.spritePilot.ready;
+    this.spritePilot.root.visible = useSprite && this.pilot.root.visible;
+    if (useSprite) {
+      this.spritePilot.update(p, inMenu ? t : sim!.time, inMenu);
+      this.pilot.root.visible = false;
+      this.pilot.glow.intensity = 0;
+    }
+    this.host.dataset.characterRenderer = useSprite ? '2d' : '3d';
+    this.host.dataset.spriteFrame = useSprite
+      ? String(this.spritePilot.frame)
+      : '';
     this.shake *= Math.exp(-dt * 13);
     this.flash.intensity *= Math.exp(-dt * 12);
     for (let i = 0; i < 900; i++) {
@@ -517,6 +532,7 @@ export class GameScene {
     this.composer.render();
   }
   dispose() {
+    this.spritePilot.dispose();
     this.composer.dispose();
     this.renderer.dispose();
     this.renderer.domElement.remove();

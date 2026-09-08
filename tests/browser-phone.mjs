@@ -113,6 +113,14 @@ for (const [width, height, label] of [
     )
       break;
   }
+  if (process.argv.includes('--sprite')) {
+    for (let i = 0; i < 60; i++) {
+      const ready = await evaluate(`!![...document.querySelectorAll('.character-options button')].find(b=>b.textContent.includes('2D SPRITE')&&!b.disabled)`);
+      if (ready) break;
+      await wait(100);
+    }
+    await evaluate(`[...document.querySelectorAll('.character-options button')].find(b=>b.textContent.includes('2D SPRITE')).click()`);
+  }
   await evaluate(`document.querySelector('.deploy').click()`);
   await wait(400);
   const layout = await evaluate(
@@ -294,6 +302,14 @@ if (!process.argv.includes('--quick')) {
       )
     )
       break;
+  }
+  if (process.argv.includes('--sprite')) {
+    for (let i = 0; i < 60; i++) {
+      const ready = await evaluate(`!![...document.querySelectorAll('.character-options button')].find(b=>b.textContent.includes('2D SPRITE')&&!b.disabled)`);
+      if (ready) break;
+      await wait(100);
+    }
+    await evaluate(`[...document.querySelectorAll('.character-options button')].find(b=>b.textContent.includes('2D SPRITE')).click()`);
   }
   await evaluate(`document.querySelector('.deploy').click()`);
   await wait(250);
