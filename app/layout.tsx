@@ -13,9 +13,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'ASH VECTOR — Operation Black Rain',
+  title: 'ASH VECTOR — One Tiny Change',
   description:
-    'A cinematic 2.5D run-and-gun assault. Double jump, air dash, and blast through Operation Black Rain.',
+    'Patrick and Su versus one tiny change. Eight weapons, energy swords, double jumps, and a very unreasonable deadline.',
 };
 export const viewport: Viewport = {
   width: 'device-width',

@@ -237,7 +237,7 @@ check('Victory and fresh replay reset the mission', () => {
   replay.start();
   assert.equal(replay.score, 0);
   assert.equal(replay.boss.hp, 1000);
-  assert.equal(replay.enemies.length, 22);
+  assert.equal(replay.enemies.length, 34);
 });
 // Exercise the actual mission rules from first deployment through final victory.
 const run = new Simulation();

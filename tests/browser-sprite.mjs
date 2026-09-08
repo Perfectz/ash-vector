@@ -42,6 +42,8 @@ const key = (type, code, key) => cdp('Input.dispatchKeyEvent', { type, code, key
 const tap = async (code, name) => { await key('keyDown', code, name); await key('keyUp', code, name); await wait(80); };
 const reload = async () => {
   await cdp('Page.navigate', { url: 'http://127.0.0.1:5173/' });
+  await until(`!!document.querySelector('[data-hero="operative"]:not(:disabled)')`);
+  await evaluate(`document.querySelector('[data-hero="operative"]').click()`);
   await until(`!![...document.querySelectorAll('button')].find(b => b.textContent.includes('2D SPRITE') && !b.disabled)`);
 };
 try {
@@ -54,7 +56,7 @@ try {
   await shot('sprite-desktop-title');
   await reload();
   assert.equal((await state()).characterStyle, '2d');
-  await click('DEPLOY OPERATIVE'); await wait(160);
+  await evaluate(`document.querySelector('.title-screen .deploy').click()`); await wait(160);
   await key('keyDown', 'KeyD', 'd'); await wait(300);
   assert(Number((await state()).spriteFrame) >= 4 && Number((await state()).spriteFrame) <= 7);
   await tap('Space', ' ');

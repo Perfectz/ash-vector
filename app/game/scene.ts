@@ -13,9 +13,10 @@ import {
   type Rig,
   palette,
 } from './models';
-import { Simulation, type Enemy, type GameEvent } from './simulation';
+import { Simulation, weapons, type Enemy, type GameEvent } from './simulation';
 import { frameCombatCamera, aimOnCombatPlane } from './camera';
 import { SpriteOperative, type CharacterStyle } from './sprite';
+import { EnemySprites } from './enemySprites';
 
 type Particle = {
   p: T.Vector3;
@@ -34,12 +35,31 @@ export class GameScene {
   bloom: UnrealBloomPass;
   pilot = operative();
   spritePilot = new SpriteOperative();
+  rosterSprites = {
+    operative: this.spritePilot,
+    patrick: new SpriteOperative('patrick'),
+    su: new SpriteOperative('su'),
+  };
   characterStyle: CharacterStyle = '3d';
   boss = siegeMech();
   sun = new T.DirectionalLight(0xffc49a, 3.5);
   aim = new T.Vector3(20, 1.5, 0);
   ray = new T.Raycaster();
-  enemies = new Map<number, { root: T.Group; rig?: Rig }>();
+  enemies = new Map<
+    number,
+    { root: T.Group; rig?: Rig; sprite?: T.Sprite; fallback?: T.Group }
+  >();
+  enemyArt = new EnemySprites();
+  saberArc = new T.Mesh(
+    new T.RingGeometry(2.65, 3.05, 36, 1, -Math.PI / 3, (Math.PI * 2) / 3),
+    new T.MeshBasicMaterial({
+      color: 0x58ffd4,
+      transparent: true,
+      opacity: 0.5,
+      side: T.DoubleSide,
+      depthWrite: false,
+    }),
+  );
   particles: Particle[] = [];
   particleMesh: T.InstancedMesh;
   bulletMesh: T.InstancedMesh;
@@ -100,6 +120,9 @@ export class GameScene {
     this.pilot.root.scale.setScalar(1.18);
     this.scene.add(this.pilot.root);
     this.scene.add(this.spritePilot.root);
+    this.scene.add(this.rosterSprites.patrick.root, this.rosterSprites.su.root);
+    this.saberArc.visible = false;
+    this.scene.add(this.saberArc);
     this.boss.position.set(177, 0, 0);
     this.scene.add(this.boss);
     this.particleMesh = new T.InstancedMesh(
@@ -232,6 +255,8 @@ export class GameScene {
         'jump',
         'pickup',
         'sector',
+        'slash',
+        'doubleJump',
       ].includes(event.kind)
     )
       return;
@@ -243,6 +268,8 @@ export class GameScene {
     const size = event.size ?? 1;
     const color = new T.Color(
       event.kind === 'dash' ||
+        event.kind === 'slash' ||
+        event.kind === 'doubleJump' ||
         event.kind === 'pickup' ||
         event.kind === 'sector'
         ? 0x80f5d7
@@ -280,7 +307,13 @@ export class GameScene {
   enemyModel(e: Enemy) {
     let model = this.enemies.get(e.id);
     if (!model) {
-      if (e.kind === 'soldier') {
+      if (e.kind === 'creep' || e.kind === 'shield') {
+        const root = new T.Group(),
+          sprite = this.enemyArt.make(),
+          fallback = operative(true).root;
+        root.add(sprite, fallback);
+        model = { root, sprite, fallback };
+      } else if (e.kind === 'soldier') {
         const rig = operative(true);
         model = { root: rig.root, rig };
       } else model = { root: e.kind === 'drone' ? drone() : turret() };
@@ -368,6 +401,7 @@ export class GameScene {
       const living = new Set(sim.enemies.map((e) => e.id));
       for (const [id, m] of this.enemies)
         if (!living.has(id)) {
+          if (m.sprite) this.enemyArt.remove(m.sprite);
           m.root.removeFromParent();
           this.enemies.delete(id);
         }
@@ -377,6 +411,11 @@ export class GameScene {
         if (!m.root.visible) continue;
         m.root.position.set(e.x, e.y, e.z);
         m.root.rotation.y = e.kind === 'turret' ? e.angle - Math.PI : e.angle;
+        if (m.sprite) {
+          m.root.rotation.y = 0;
+          this.enemyArt.update(m.sprite, e, sim.time);
+          if (m.fallback) m.fallback.visible = !this.enemyArt.ready;
+        }
         if (m.rig) {
           m.rig.legs.forEach((leg, i) => {
             leg.rotation.z = e.active
@@ -406,18 +445,33 @@ export class GameScene {
         this.dummy.position.set(b.x, b.y, b.z);
         this.direction.set(b.vx, b.vy, b.vz).normalize();
         this.dummy.quaternion.setFromUnitVectors(this.up, this.direction);
+        const width = b.friendly
+          ? b.weapon === 3
+            ? 0.2
+            : b.weapon === 5
+              ? 0.16 + (0.22 - b.life) * 1.4
+              : b.weapon === 7
+                ? 0.35
+                : 0.065
+          : 0.18;
         this.dummy.scale.set(
-          b.friendly ? 0.065 : 0.18,
-          b.friendly ? (b.weapon === 2 ? 2.2 : 1) : 0.34,
-          b.friendly ? 0.065 : 0.18,
+          width,
+          b.friendly
+            ? b.weapon === 2
+              ? 2.2
+              : b.weapon === 7
+                ? 0.12
+                : b.weapon === 5
+                  ? 0.4
+                  : 1
+            : 0.34,
+          width,
         );
         this.dummy.updateMatrix();
         this.bulletMesh.setMatrixAt(bi, this.dummy.matrix);
         this.bulletMesh.setColorAt(
           bi,
-          new T.Color(
-            b.friendly ? (b.weapon === 2 ? 0x9bffee : 0xffdf86) : 0xff387b,
-          ),
+          new T.Color(b.friendly ? weapons[b.weapon].color : 0xff387b),
         );
         bi++;
       }
@@ -486,17 +540,37 @@ export class GameScene {
         }
       this.rain.position.x = this.cameraX;
     }
-    const useSprite = this.characterStyle === '2d' && this.spritePilot.ready;
-    this.spritePilot.root.visible = useSprite && this.pilot.root.visible;
+    const selectedSprite = this.rosterSprites[sim?.character ?? 'operative'];
+    const useSprite =
+      (sim?.character !== 'operative' || this.characterStyle === '2d') &&
+      selectedSprite.ready;
+    for (const sprite of Object.values(this.rosterSprites))
+      sprite.root.visible = false;
+    selectedSprite.root.visible = useSprite && this.pilot.root.visible;
     if (useSprite) {
-      this.spritePilot.update(p, inMenu ? t : sim!.time, inMenu);
+      selectedSprite.update(p, inMenu ? t : sim!.time, inMenu);
       this.pilot.root.visible = false;
       this.pilot.glow.intensity = 0;
     }
     this.host.dataset.characterRenderer = useSprite ? '2d' : '3d';
     this.host.dataset.spriteFrame = useSprite
-      ? String(this.spritePilot.frame)
+      ? String(selectedSprite.frame)
       : '';
+    this.host.dataset.renderedCharacter = useSprite
+      ? selectedSprite.character
+      : 'operative';
+    this.saberArc.visible =
+      !inMenu &&
+      sim?.character === 'patrick' &&
+      !!p &&
+      p.meleeTime > 0.1 &&
+      p.meleeTime < 0.28;
+    if (this.saberArc.visible && p) {
+      this.saberArc.position.set(p.x, p.y + 1.2, 0.5);
+      this.saberArc.scale.x = p.meleeFacing;
+      this.saberArc.material.opacity =
+        Math.sin(((0.28 - p.meleeTime) / 0.18) * Math.PI) * 0.4;
+    }
     this.shake *= Math.exp(-dt * 13);
     this.flash.intensity *= Math.exp(-dt * 12);
     for (let i = 0; i < 900; i++) {
@@ -532,7 +606,9 @@ export class GameScene {
     this.composer.render();
   }
   dispose() {
-    this.spritePilot.dispose();
+    for (const sprite of Object.values(this.rosterSprites)) sprite.dispose();
+    this.enemyArt.dispose();
+    this.saberArc.material.dispose();
     this.composer.dispose();
     this.renderer.dispose();
     this.renderer.domElement.remove();

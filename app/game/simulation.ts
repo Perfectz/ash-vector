@@ -1,6 +1,23 @@
 // Deterministic gameplay. Rendering and input adapters do not modify the rules.
+export type CharacterId = 'operative' | 'patrick' | 'su';
+export const characters = {
+  operative: {
+    name: 'OPERATIVE',
+    role: 'Pulse specialist',
+    ability: 'Dash + double jump',
+  },
+  patrick: {
+    name: 'PATRICK',
+    role: 'Crimson saber',
+    ability: 'Energy sword · K / Y',
+  },
+  su: { name: 'SU', role: 'Sky dancer', ability: 'Boosted double jump' },
+} as const;
+export const characterKey = 'ash-vector:character';
+export const isCharacter = (value: unknown): value is CharacterId =>
+  value === 'operative' || value === 'patrick' || value === 'su';
 export type Vec = { x: number; y: number; z: number };
-export type EnemyKind = 'soldier' | 'drone' | 'turret';
+export type EnemyKind = 'soldier' | 'drone' | 'turret' | 'creep' | 'shield';
 export type Enemy = Vec & {
   id: number;
   kind: EnemyKind;
@@ -11,6 +28,7 @@ export type Enemy = Vec & {
   active: boolean;
   angle: number;
   flash: number;
+  guard?: boolean;
 };
 export type Bullet = Vec & {
   id: number;
@@ -21,6 +39,8 @@ export type Bullet = Vec & {
   damage: number;
   life: number;
   weapon: number;
+  hitIds?: number[];
+  bounces?: number;
 };
 export type Grenade = Vec & {
   id: number;
@@ -47,6 +67,8 @@ export type GameEvent = Vec & {
     | 'dash'
     | 'pickup'
     | 'sector'
+    | 'slash'
+    | 'doubleJump'
     | 'victory';
   size?: number;
   weapon?: number;
@@ -60,6 +82,7 @@ export type Input = {
   dash: boolean;
   grenade: boolean;
   switchWeapon: boolean;
+  melee: boolean;
 };
 export const neutralInput = (): Input => ({
   mx: 0,
@@ -70,17 +93,81 @@ export const neutralInput = (): Input => ({
   dash: false,
   grenade: false,
   switchWeapon: false,
+  melee: false,
 });
 export const weapons = [
-  { name: 'PULSE CARBINE', short: 'PULSE', rate: 0.1, damage: 12, speed: 76 },
   {
-    name: 'BREACH SHOTGUN',
-    short: 'BREACH',
+    name: 'PROMPT PISTOL',
+    short: 'PROMPT',
+    rate: 0.1,
+    damage: 12,
+    speed: 76,
+    description: 'Fast, precise, and unusually confident.',
+    color: 0xffd889,
+  },
+  {
+    name: 'SCOPE SPREADER',
+    short: 'SPREAD',
     rate: 0.36,
     damage: 10,
     speed: 65,
+    description: 'Seven pellets. One tiny change.',
+    color: 0xff955b,
   },
-  { name: 'ARC LANCE', short: 'LANCE', rate: 0.35, damage: 48, speed: 105 },
+  {
+    name: 'DEADLINE RAIL',
+    short: 'RAIL',
+    rate: 0.38,
+    damage: 48,
+    speed: 105,
+    description: 'Pierces a whole queue of problems.',
+    color: 0x9bffee,
+  },
+  {
+    name: 'HOTFIX LAUNCHER',
+    short: 'ROCKET',
+    rate: 0.65,
+    damage: 75,
+    speed: 28,
+    description: 'Explosive area damage. A very thorough fix.',
+    color: 0xff6644,
+  },
+  {
+    name: 'THE DELEGATOR',
+    short: 'HOMING',
+    rate: 0.22,
+    damage: 18,
+    speed: 27,
+    description: 'Seeking bolts find someone else to deal with.',
+    color: 0xc5a1ff,
+  },
+  {
+    name: 'HOT TAKE',
+    short: 'FLAME',
+    rate: 0.055,
+    damage: 5,
+    speed: 26,
+    description: 'Short-range flame. Opinions run hot.',
+    color: 0xffa53e,
+  },
+  {
+    name: 'BOUNCE BACK',
+    short: 'BOUNCE',
+    rate: 0.19,
+    damage: 25,
+    speed: 35,
+    description: 'Ricochets off the floor and cargo.',
+    color: 0xf4f28b,
+  },
+  {
+    name: 'THE FOLLOW-UP',
+    short: 'RETURN',
+    rate: 0.5,
+    damage: 44,
+    speed: 32,
+    description: 'A returning energy disc. It always comes back.',
+    color: 0x6fe7ff,
+  },
 ];
 export const cover = [
   { x: 27, z: 0 },
@@ -147,7 +234,13 @@ export class Simulation {
     lastDamage: -10,
     moving: 0,
     dashX: 1,
+    meleeTime: 0,
+    meleeCooldown: 0,
+    meleeFacing: 1,
+    jumpBurst: 0,
   };
+  character: CharacterId = 'operative';
+  private meleeHits = new Set<number>();
   boss = {
     x: 177,
     y: 0,
@@ -176,12 +269,25 @@ export class Simulation {
   checkpoint = 0;
   private id = 1;
   private randomSeed = 921;
+  banter = {
+    speaker: 'SU',
+    text: 'You said this was a five-minute project.',
+    time: 6,
+  };
+  private banterIndex = -1;
   random() {
     this.randomSeed = (this.randomSeed * 1664525 + 1013904223) >>> 0;
     return this.randomSeed / 4294967296;
   }
-  constructor() {
+  constructor(character: CharacterId = 'operative') {
+    this.character = character;
     this.populate();
+  }
+  setCharacter(character: CharacterId) {
+    this.character = character;
+    this.player.meleeTime = 0;
+    this.player.jumpBurst = 0;
+    this.meleeHits.clear();
   }
   populate() {
     const waves: [EnemyKind, number, number, number][] = [
@@ -191,6 +297,9 @@ export class Simulation {
       ['soldier', 41, -0.5, 0],
       ['turret', 49, -4.5, 0],
       ['soldier', 50, 3, 0],
+      ['creep', 33, 0, 0],
+      ['creep', 46, 0, 0],
+      ['shield', 54, 0, 0],
       ['soldier', 63, -3, 1],
       ['drone', 70, 2, 1],
       ['soldier', 75, -1, 1],
@@ -199,6 +308,10 @@ export class Simulation {
       ['drone', 92, -2, 1],
       ['soldier', 99, 2, 1],
       ['turret', 102, -4, 1],
+      ['creep', 72, 0, 1],
+      ['creep', 89, 0, 1],
+      ['shield', 97, 0, 1],
+      ['shield', 106, 0, 1],
       ['soldier', 115, 2, 2],
       ['turret', 123, -4.5, 2],
       ['drone', 125, 3, 2],
@@ -207,6 +320,11 @@ export class Simulation {
       ['drone', 145, -3, 2],
       ['turret', 150, 4.5, 2],
       ['soldier', 153, -4, 2],
+      ['creep', 120, 0, 2],
+      ['creep', 137, 0, 2],
+      ['creep', 152, 0, 2],
+      ['shield', 143, 0, 2],
+      ['shield', 155, 0, 2],
     ];
     this.enemies = waves.map(([kind, x, height, sector]) => ({
       id: this.id++,
@@ -215,8 +333,26 @@ export class Simulation {
       y: kind === 'drone' ? 4 + Math.abs(height) * 0.2 : 0,
       z: 0,
       sector,
-      hp: kind === 'turret' ? 85 : kind === 'drone' ? 42 : 48,
-      maxHp: kind === 'turret' ? 85 : kind === 'drone' ? 42 : 48,
+      hp:
+        kind === 'turret'
+          ? 85
+          : kind === 'drone'
+            ? 42
+            : kind === 'shield'
+              ? 105
+              : kind === 'creep'
+                ? 36
+                : 48,
+      maxHp:
+        kind === 'turret'
+          ? 85
+          : kind === 'drone'
+            ? 42
+            : kind === 'shield'
+              ? 105
+              : kind === 'creep'
+                ? 36
+                : 48,
       cooldown: 1.3 + this.random(),
       active: false,
       angle: Math.PI,
@@ -225,7 +361,7 @@ export class Simulation {
   }
   start() {
     this.mode = 'playing';
-    this.notice = 'BLACK RAIN // BREACH THE SKYBRIDGE';
+    this.notice = 'ONE TINY CHANGE // SHIP THE BUILD';
     this.noticeTime = 4;
   }
   togglePause() {
@@ -252,7 +388,7 @@ export class Simulation {
     const cp = this.checkpoint;
     const score = Math.max(0, this.score - 1500);
     const kills = this.kills;
-    const fresh = new Simulation();
+    const fresh = new Simulation(this.character);
     Object.assign(this, fresh);
     this.checkpoint = cp;
     this.sector = cp;
@@ -267,6 +403,11 @@ export class Simulation {
     this.notice = cp
       ? 'CHECKPOINT RESTORED'
       : 'BLACK RAIN // BREACH THE SKYBRIDGE';
+    this.banter = {
+      speaker: 'PATRICK',
+      text: 'That was the test build. Obviously.',
+      time: 4,
+    };
   }
   damagePlayer(damage: number) {
     const p = this.player;
@@ -281,8 +422,9 @@ export class Simulation {
       this.emit('explosion', { ...p, y: p.y + 1 }, 2);
     }
   }
-  damageEnemy(e: Enemy, damage: number) {
+  damageEnemy(e: Enemy, damage: number, bypassGuard = false) {
     if (e.hp <= 0) return;
+    if (e.guard && !bypassGuard && this.player.y < e.y + 1.8) damage *= 0.3;
     e.hp -= damage;
     e.flash = 0.09;
     this.emit('impact', { ...e, y: e.y + 1 }, 0.5);
@@ -320,6 +462,59 @@ export class Simulation {
       this.bullets = [];
       this.hazards = [];
       this.emit('victory', { ...this.boss, y: 4 }, 6);
+    }
+  }
+  swingSword() {
+    const p = this.player;
+    if (this.character !== 'patrick' || p.meleeCooldown > 0) return;
+    p.meleeTime = 0.34;
+    p.meleeCooldown = 0.42;
+    p.meleeFacing = Math.cos(p.angle) < 0 ? -1 : 1;
+    p.flash = 0;
+    this.meleeHits.clear();
+    this.emit('slash', { x: p.x + p.meleeFacing * 1.2, y: p.y + 1.2, z: 0 });
+  }
+  swordHits() {
+    const p = this.player;
+    if (this.character !== 'patrick' || p.meleeTime > 0.28 || p.meleeTime < 0.1)
+      return;
+    const inArc = (point: Vec) => {
+      const forward = (point.x - p.x) * p.meleeFacing;
+      return (
+        forward >= -0.25 &&
+        forward <= 3.3 &&
+        Math.abs(point.y - (p.y + 1.2)) < 1.65 &&
+        !cover.some((c) => {
+          const along = (c.x - p.x) * p.meleeFacing;
+          return (
+            along > 0.7 &&
+            along < forward - 0.2 &&
+            p.y + 1.2 < 1.4 &&
+            point.y < 1.4
+          );
+        })
+      );
+    };
+    for (const enemy of this.enemies) {
+      if (
+        enemy.hp <= 0 ||
+        enemy.sector !== this.sector ||
+        this.meleeHits.has(enemy.id)
+      )
+        continue;
+      if (inArc(enemyCenter(enemy))) {
+        this.meleeHits.add(enemy.id);
+        this.damageEnemy(enemy, 60, true);
+      }
+    }
+    // Hit the near edge of the siege engine, reachable with an airborne slash.
+    if (
+      this.boss.active &&
+      !this.meleeHits.has(-1) &&
+      inArc({ x: this.boss.x - 2, y: 3, z: 0 })
+    ) {
+      this.meleeHits.add(-1);
+      this.damageBoss(90);
     }
   }
   aimTarget(input: Input): Vec {
@@ -381,8 +576,22 @@ export class Simulation {
       vz: 0,
       damage,
       friendly,
-      life: friendly ? 0.72 : 5,
+      life: friendly
+        ? weapon === 3
+          ? 1.5
+          : weapon === 4
+            ? 1.6
+            : weapon === 5
+              ? 0.22
+              : weapon === 6
+                ? 1.8
+                : weapon === 7
+                  ? 1.35
+                  : 0.72
+        : 5,
       weapon,
+      hitIds: [],
+      bounces: 0,
     });
   }
   step(dt: number, input: Input) {
@@ -391,6 +600,25 @@ export class Simulation {
     this.time += dt;
     this.jumpBuffer = input.jump ? 0.14 : Math.max(0, this.jumpBuffer - dt);
     this.noticeTime = Math.max(0, this.noticeTime - dt);
+    this.banter.time = Math.max(0, this.banter.time - dt);
+    const beat = Math.floor(this.time / 9);
+    if (beat > this.banterIndex && this.time > 7) {
+      this.banterIndex = beat;
+      const lines = [
+        ['PATRICK', 'Can we make this triple A?'],
+        ['SU', 'You gave me a browser tab and a deadline.'],
+        ['PATRICK', 'Now make it a comic. And an intro video.'],
+        ['SU', 'First, survive the tutorial.'],
+        ['PATRICK', 'One more weapon. For variety.'],
+        ['SU', 'Eight weapons. Still one pair of hands.'],
+        ['PATRICK', 'Deploy it. I need a link I can share.'],
+        ['SU', 'The boss is still running the approval meeting.'],
+        ['PATRICK', 'It needs to work on my phone.'],
+        ['SU', 'Then stop adding buttons.'],
+      ];
+      const [speaker, text] = lines[beat % lines.length];
+      this.banter = { speaker, text, time: 4.5 };
+    }
     this.comboTime -= dt;
     if (this.comboTime <= 0) this.combo = 0;
     const p = this.player;
@@ -399,18 +627,25 @@ export class Simulation {
     p.shotCooldown -= dt;
     p.grenadeCooldown -= dt;
     p.flash = Math.max(0, p.flash - dt);
+    p.meleeTime = Math.max(0, p.meleeTime - dt);
+    p.meleeCooldown = Math.max(0, p.meleeCooldown - dt);
+    p.jumpBurst = Math.max(0, p.jumpBurst - dt);
     if (this.time - p.lastDamage > 5) p.hp = Math.min(100, p.hp + dt * 2.5);
     let dx = clamp(input.mx, -1, 1);
     const len = Math.abs(dx);
     p.moving = len;
     if (!input.aim && !input.autoAim && len > 0.1)
       p.angle = dx < 0 ? Math.PI : 0;
-    if (input.switchWeapon) p.weapon = (p.weapon + 1) % 3;
+    if (input.switchWeapon) p.weapon = (p.weapon + 1) % weapons.length;
     if (this.jumpBuffer > 0 && p.jumps < 2) {
       this.jumpBuffer = 0;
-      p.vy = p.jumps === 0 ? 10 : 8.7;
+      p.vy = p.jumps === 0 ? 10 : this.character === 'su' ? 11.2 : 8.7;
       p.jumps++;
       this.emit('jump', p);
+      if (this.character === 'su' && p.jumps === 2) {
+        p.jumpBurst = 0.38;
+        this.emit('doubleJump', p);
+      }
     }
     if (input.dash && p.dashCooldown <= 0) {
       p.dashTime = 0.23;
@@ -470,14 +705,13 @@ export class Simulation {
       this.checkpoint = this.sector;
       p.hp = 100;
       p.grenades = 3;
-      p.weapon = Math.min(this.sector, 2);
       this.emit('sector', p);
       this.notice =
         this.sector === 3
-          ? 'WARNING // SIEGE ENGINE ONLINE'
+          ? 'WARNING // THE DEADLINE HAS ARRIVED'
           : this.sector === 1
-            ? 'CHECKPOINT // FOUNDRY APPROACH'
-            : 'CHECKPOINT // THE KILLING FLOOR';
+            ? 'CHECKPOINT // SCOPE CREEP FACTORY'
+            : 'CHECKPOINT // APPROVAL PURGATORY';
       this.noticeTime = 4;
       if (this.sector === 3) this.boss.active = true;
     }
@@ -498,6 +732,19 @@ export class Simulation {
       if (!e.active) continue;
       const flat = Math.hypot(p.x - e.x, p.z - e.z);
       e.angle = Math.atan2(-(p.z - e.z), p.x - e.x);
+      if (e.kind === 'shield') e.guard = e.cooldown > 0.8;
+      if (e.kind === 'creep') {
+        const nextX = e.x + Math.sign(p.x - e.x) * (flat < 5 ? 5 : 2.6) * dt;
+        const obstacle = cover.some((c) => Math.abs(nextX - c.x) < 1.65);
+        e.y = obstacle
+          ? 1.5
+          : Math.max(0, Math.sin(this.time * 5 + e.id) * 0.45);
+        e.x = nextX;
+      }
+      if (e.kind === 'shield' && flat > 3) {
+        const nextX = e.x + Math.sign(p.x - e.x) * 0.9 * dt;
+        if (!cover.some((c) => Math.abs(nextX - c.x) < 1.7)) e.x = nextX;
+      }
       if (e.kind === 'soldier' && flat > 9) {
         const nextX = e.x + Math.sign(p.x - e.x) * 1.25 * dt;
         if (!cover.some((c) => Math.abs(nextX - c.x) < 1.7)) e.x = nextX;
@@ -506,7 +753,7 @@ export class Simulation {
         e.y = 4.5 + Math.sin(this.time * 1.7 + e.id) * 0.85;
       }
       e.cooldown -= dt;
-      if (e.cooldown <= 0) {
+      if (e.cooldown <= 0 && e.kind !== 'creep') {
         const origin = {
             x: e.x,
             y: e.y + (e.kind === 'drone' ? 0 : 1.25),
@@ -527,20 +774,28 @@ export class Simulation {
         this.emit('enemyShot', origin);
         e.cooldown = (e.kind === 'turret' ? 2.2 : 1.65) + this.random() * 0.65;
       }
-      if (flat < 1.05 && p.y < 2 && e.kind !== 'drone') this.damagePlayer(12);
+      if (flat < 1.05 && Math.abs(p.y - e.y) < 1.7 && e.kind !== 'drone')
+        this.damagePlayer(12);
     }
     const target = this.aimTarget(input);
     this.aimPoint = target;
-    if (Math.abs(target.x - p.x) > 0.05) p.angle = target.x < p.x ? Math.PI : 0;
+    if (p.meleeTime <= 0 && Math.abs(target.x - p.x) > 0.05)
+      p.angle = target.x < p.x ? Math.PI : 0;
     p.aimPitch = Math.atan2(target.y - (p.y + 1.4), Math.abs(target.x - p.x));
-    if (input.fire && p.shotCooldown <= 0) {
+    if (input.melee) {
+      if (p.meleeTime <= 0 && Math.abs(input.mx) > 0.1)
+        p.angle = input.mx < 0 ? Math.PI : 0;
+      this.swingSword();
+    }
+    this.swordHits();
+    if (input.fire && p.shotCooldown <= 0 && p.meleeTime <= 0) {
       const w = weapons[p.weapon],
         origin = {
           x: p.x + Math.cos(p.angle) * Math.cos(p.aimPitch) * 1.2,
           y: p.y + 1.4 + Math.sin(p.aimPitch) * 1.2,
           z: 0,
         };
-      const n = p.weapon === 1 ? 7 : 1;
+      const n = p.weapon === 1 ? 7 : p.weapon === 5 ? 3 : 1;
       for (let j = 0; j < n; j++)
         this.shoot(
           origin,
@@ -549,7 +804,7 @@ export class Simulation {
           w.damage,
           w.speed,
           p.weapon,
-          (j - (n - 1) / 2) * 0.043,
+          (j - (n - 1) / 2) * (p.weapon === 5 ? 0.13 : 0.043),
         );
       p.shotCooldown = w.rate;
       p.flash = 0.045;
@@ -586,7 +841,7 @@ export class Simulation {
       if (g.life <= 0) {
         this.emit('explosion', g, 3);
         for (const e of this.enemies)
-          if (dist(e, g) < 7) this.damageEnemy(e, 110);
+          if (dist(e, g) < 7) this.damageEnemy(e, 110, true);
         if (
           this.boss.active &&
           Math.hypot(this.boss.x - g.x, this.boss.z - g.z) < 8
@@ -597,6 +852,30 @@ export class Simulation {
     this.grenades = this.grenades.filter((g) => g.life > 0);
     if (this.boss.active && this.mode === 'playing') this.updateBoss(dt);
     for (const b of this.bullets) {
+      if (b.life <= 0) continue;
+      if (b.friendly && (b.weapon === 4 || (b.weapon === 7 && b.life < 0.68))) {
+        const target =
+          b.weapon === 7
+            ? { ...p, y: p.y + 1.4 }
+            : this.enemies
+                .filter((e) => e.active && e.hp > 0)
+                .map(enemyCenter)
+                .concat(
+                  this.boss.active ? [{ x: this.boss.x - 1, y: 4, z: 0 }] : [],
+                )
+                .sort((a, c) => dist(a, b) - dist(c, b))[0];
+        if (target) {
+          const length = Math.hypot(target.x - b.x, target.y - b.y) || 1;
+          const blend = Math.min(1, dt * (b.weapon === 7 ? 13 : 5));
+          b.vx +=
+            (((target.x - b.x) / length) * weapons[b.weapon].speed - b.vx) *
+            blend;
+          b.vy +=
+            (((target.y - b.y) / length) * weapons[b.weapon].speed - b.vy) *
+            blend;
+          if (b.weapon === 7 && length < 0.5) b.life = 0;
+        }
+      }
       const old = { x: b.x, y: b.y, z: b.z };
       b.x += b.vx * dt;
       b.y += b.vy * dt;
@@ -604,14 +883,18 @@ export class Simulation {
       b.life -= dt;
       if (b.friendly) {
         for (const e of this.enemies) {
-          if (!e.active || e.hp <= 0) continue;
+          if (!e.active || e.hp <= 0 || b.hitIds?.includes(e.id)) continue;
           const center = enemyCenter(e);
           if (
             segmentDistance(center, old, b) < (e.kind === 'turret' ? 0.9 : 0.78)
           ) {
-            this.damageEnemy(e, b.damage);
-            b.life = 0;
-            break;
+            if (b.weapon !== 3)
+              this.damageEnemy(e, b.damage, b.weapon === 2 || b.weapon === 5);
+            b.hitIds?.push(e.id);
+            if (b.weapon !== 2 && b.weapon !== 7) {
+              b.life = 0;
+              break;
+            }
           }
         }
         if (
@@ -621,10 +904,12 @@ export class Simulation {
             { x: this.boss.x - 1, y: 4, z: this.boss.z },
             old,
             b,
-          ) < 3.1
+          ) < 3.1 &&
+          !b.hitIds?.includes(-1)
         ) {
-          this.damageBoss(b.damage);
-          b.life = 0;
+          if (b.weapon !== 3) this.damageBoss(b.damage);
+          b.hitIds?.push(-1);
+          if (b.weapon !== 2 && b.weapon !== 7) b.life = 0;
         }
       } else if (
         segmentDistance({ x: p.x, y: p.y + 1, z: p.z }, old, b) < 0.55
@@ -632,7 +917,11 @@ export class Simulation {
         this.damagePlayer(b.damage);
         b.life = 0;
       }
-      if (b.y < 0) {
+      if (b.y < 0 && b.friendly && b.weapon === 6 && (b.bounces ?? 0) < 4) {
+        b.y = 0.1;
+        b.vy = Math.abs(b.vy) + 9;
+        b.bounces = (b.bounces ?? 0) + 1;
+      } else if (b.y < 0) {
         this.emit('impact', b, 0.3);
         b.life = 0;
       }
@@ -643,9 +932,23 @@ export class Simulation {
           Math.abs(b.x - c.x) < 1.35 &&
           Math.abs(b.z - c.z) < 1.15
         ) {
-          b.life = 0;
+          if (b.friendly && b.weapon === 6 && (b.bounces ?? 0) < 4) {
+            b.vx *= -1;
+            b.vy = 12;
+            b.x = old.x;
+            b.bounces = (b.bounces ?? 0) + 1;
+          } else b.life = 0;
           this.emit('impact', b, 0.4);
         }
+      }
+      if (b.friendly && b.weapon === 6) b.vy -= 16 * dt;
+      if (b.friendly && b.weapon === 3 && b.life <= 0) {
+        this.emit('explosion', b, 2.4);
+        for (const e of this.enemies)
+          if (e.sector === this.sector && dist(enemyCenter(e), b) < 4.2)
+            this.damageEnemy(e, b.damage, true);
+        if (this.boss.active && dist({ x: this.boss.x - 1, y: 4, z: 0 }, b) < 6)
+          this.damageBoss(b.damage * 1.5);
       }
     }
     this.bullets = this.bullets.filter((b) => b.life > 0);

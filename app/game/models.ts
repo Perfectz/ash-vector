@@ -316,6 +316,38 @@ export function makeWorld(scene: T.Scene) {
   };
   const env = new T.Group();
   scene.add(env);
+  const signs = [
+    [18, 'ONE TINY CHANGE', 'ESTIMATED TIME: FIVE MINUTES'],
+    [66, 'SCOPE CREEP FACTORY', 'NOW WITH 300% MORE FEATURES'],
+    [119, 'APPROVAL PURGATORY', 'PLEASE WAIT FOR THE NEXT MEETING'],
+    [171, 'THE DEADLINE', 'FINAL_FINAL_ACTUALLY_FINAL'],
+  ] as const;
+  for (const [x, title, subtitle] of signs) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 1024;
+    canvas.height = 256;
+    const ctx = canvas.getContext('2d')!;
+    ctx.fillStyle = '#09232d';
+    ctx.fillRect(0, 0, 1024, 256);
+    ctx.strokeStyle = '#74cabc';
+    ctx.lineWidth = 5;
+    ctx.strokeRect(12, 12, 1000, 232);
+    ctx.fillStyle = '#f17b4e';
+    ctx.font = 'bold 62px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText(title, 512, 108);
+    ctx.fillStyle = '#b4dfd4';
+    ctx.font = '26px monospace';
+    ctx.fillText(subtitle, 512, 183);
+    const map = new T.CanvasTexture(canvas);
+    map.colorSpace = T.SRGBColorSpace;
+    const sign = new T.Mesh(
+      new T.PlaneGeometry(16, 4),
+      new T.MeshBasicMaterial({ map }),
+    );
+    sign.position.set(x, 11.5, -7);
+    env.add(sign);
+  }
   const ground = new T.MeshStandardMaterial({
     color: 0x263a40,
     metalness: 0.72,

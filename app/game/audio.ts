@@ -89,6 +89,14 @@ export class Soundscape {
   effect(kind: string, weapon = 0) {
     if (!this.context || this.muted) return;
     switch (kind) {
+      case 'slash':
+        this.noise(0.2, 0.35, 4800);
+        this.tone(720, 0.19, 0.28, 'sawtooth', 85);
+        break;
+      case 'doubleJump':
+        this.tone(330, 0.24, 0.2, 'sine', 1200);
+        this.noise(0.18, 0.13, 3200);
+        break;
       case 'shot':
         this.tone(
           weapon === 2 ? 650 : 180,

@@ -762,11 +762,15 @@ kbd {
   background: #041219bd;
   backdrop-filter: blur(9px);
   z-index: 6;
+  overflow-y: auto;
 }
 .state-panel {
   max-width: 620px;
   padding: 42px;
   text-align: left;
+  margin: auto;
+  max-height: 100dvh;
+  overflow-y: auto;
 }
 .state-panel h2 {
   font-size: clamp(35px, 5vw, 65px);
@@ -1346,6 +1350,64 @@ kbd {
 }
 
 /* Character appearance selection. */
+.roster-picker { border: 0; padding: 0; margin: 0 0 16px; width: 420px; max-width: 100%; text-align: left; }
+.roster-picker legend, .arsenal-picker legend { color: #b2c6c7; font: 9px var(--font-geist-mono), monospace; letter-spacing: 2px; margin-bottom: 8px; }
+.roster-options { display: grid; grid-template-columns: 1fr 1fr .85fr; gap: 7px; }
+.roster-options button { position: relative; overflow: hidden; padding: 11px 8px; min-height: 100px; color: #d4e4e2; text-align: left; background: #0a2029ed; border: 1px solid #6c87896b; }
+.roster-options button[aria-pressed=true] { border-color: #8affe0; box-shadow: inset 0 -3px #8affe0; background: #164038ed; }
+.roster-options button:disabled { opacity: .5; }
+.roster-options strong { display: block; font: 700 11px var(--font-geist-mono), monospace; margin-top: 52px; letter-spacing: 1px; position: relative; }
+.roster-options small { display: block; font-size: 9px; line-height: 1.4; margin-top: 4px; color: #b6cccc; position: relative; }
+.roster-portrait { display: block; position: absolute; top: 5px; right: 7px; width: 55px; height: 55px; border-radius: 5px; background-size: 400% 400%; background-color: #fff; background-repeat: no-repeat; }
+.portrait-patrick { background-image: url('/sprites/patrick-sheet-v1.png'); }
+.portrait-su { background-image: url('/sprites/su-sheet-v1.png'); }
+.portrait-operative { background-image: url('/sprites/operative-sheet-v1.png'); opacity: .65; }
+.roster-picker > p { font-size: 11px; color: #b7d6cc; margin: 9px 0 0; font-style: italic; }
+.state-panel .roster-picker { width: 100%; margin: 18px 0; }
+.arsenal-picker { border: 0; padding: 0; margin: 18px 0; text-align: left; }
+.arsenal-picker > div { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.arsenal-picker button { min-height: 44px; padding: 6px; border: 1px solid #557276; background: #132b34; color: #d8e7e3; font-size: 10px; }
+.arsenal-picker button[aria-pressed=true] { border-color: #ffb083; background: #633f2e; }
+.arsenal-picker p { font-size: 11px; color: #b3c8c8; }
+.radio-banter { position: absolute; bottom: 76px; left: 50%; transform: translateX(-50%); width: 370px; max-width: 40vw; display: flex; gap: 10px; padding: 10px 13px; border-left: 2px solid #83efdb; background: #081d29e8; color: #d6e3e1; font-size: 12px; line-height: 1.5; pointer-events: none; }
+.radio-banter b { color: #96f1df; font: 10px var(--font-geist-mono), monospace; padding-top: 3px; }
+.radio-patrick { border-color: #ff9479; }
+.radio-patrick b { color: #ff9479; }
+.weapon-options { display: grid; grid-template-columns: repeat(4, 1fr); }
+.weapon-options button { padding: 6px 5px; font-size: 8px; }
+.weapon-options kbd { display: none; }
+.weapon-description { font-size: 9px; margin: 7px 0 0; color: #b7ccca; }
+.touch-controls .touch-saber { position: absolute; left: 0; bottom: 94px; width: 136px; min-height: 44px; border-color: #70dfbd; background: #12524bea; color: #b8ffe4; flex-direction: row; font-size: 10px; }
+.touch-saber b { font-size: 20px; margin-right: 8px; }
+.touch-mode .touch-controls:has(.touch-saber) { height: 214px; }
+.title-screen { bottom: 72px; overflow-y: auto; scrollbar-width: thin; }
+.title-screen h1 { font-size: clamp(55px, 6vw, 96px); letter-spacing: -4px; }
+.title-screen .mission-meta { display: none; }
+@media (orientation: portrait) {
+  .touch-mode .title-screen h1 { font-size: clamp(42px, 13vw, 65px) !important; margin: 16px 0; }
+  .touch-mode .title-screen .phone-intro { display: none; }
+  .touch-mode .title-screen .intro { font-size: 12px; line-height: 1.5; }
+  .touch-mode .roster-picker { margin-bottom: 12px; }
+  .touch-mode .roster-options button { min-height: 104px; padding: 8px 6px; }
+  .touch-mode .roster-options strong { font-size: 10px; }
+  .touch-mode .roster-options small { font-size: 8px; }
+  .touch-mode .radio-banter { top: calc(130px + env(safe-area-inset-top)); bottom: auto; max-width: none; width: 86%; padding: 5px 9px; font-size: 10px; }
+  .touch-mode.in-mission:has(.touch-saber) .world { bottom: calc(236px + env(safe-area-inset-bottom)); }
+}
+@media (orientation: landscape) and (max-height: 600px) {
+  .touch-mode .title-screen .roster-picker { grid-column: 2; width: 100%; margin-bottom: 10px; }
+  .touch-mode .title-screen .intro { display: none; }
+  .touch-mode .title-screen h1 { font-size: 48px !important; }
+  .touch-mode .roster-options button { min-height: 80px; padding: 6px; }
+  .touch-mode .roster-portrait { width: 36px; height: 36px; }
+  .touch-mode .roster-options strong { margin-top: 34px; font-size: 9px; }
+  .touch-mode .roster-options small { font-size: 8px; }
+  .touch-mode .roster-picker > p { display: none; }
+  .touch-mode .radio-banter { top: 65px; bottom: auto; padding: 5px 8px; max-width: 43vw; font-size: 10px; }
+  .touch-mode .touch-controls:has(.touch-saber) { height: 166px; }
+  .touch-controls .touch-saber { bottom: 100px; width: 116px; }
+}
+@media (max-width: 350px) { .touch-controls .touch-saber { width: 122px; bottom: 78px; } .roster-picker > p { font-size: 9px; } }
 .character-picker {
   width: 320px;
   max-width: 100%;
@@ -1434,10 +1496,19 @@ kbd {
 
 
 /* Keep the selector and deployment reachable on short phone screens. */
+@media (orientation: portrait) and (max-height: 700px) {
+  .touch-mode[data-character='operative'] .title-screen .intro,
+  .touch-mode[data-character='operative'] .title-screen .roster-picker > p { display: none; }
+  .touch-mode[data-character='operative'] .title-screen h1 { font-size: 38px !important; margin: 10px 0; }
+}
 .touch-mode:not(.in-mission) .title-screen {
   overflow-y: auto;
   scrollbar-width: thin;
   max-height: calc(100dvh - 85px - env(safe-area-inset-top));
+}
+@media (max-height: 680px) and (min-width: 601px) {
+  .title-screen h1 { font-size: 66px !important; margin: 16px 0; }
+  .title-screen { top: 84px; }
 }
 @media (orientation: portrait) {
   .touch-mode .title-screen {
@@ -1474,10 +1545,12 @@ kbd {
     display: none;
   }
   .touch-mode .title-screen .character-picker {
-    grid-column: 2;
+    grid-column: 1;
+    grid-row: 4;
     width: 100%;
-    margin: 8px 0 12px;
+    margin: -8px 0 12px;
   }
+  .touch-mode[data-character='operative'] .title-screen h1 { grid-row: 2 / 4; }
   .touch-mode .character-picker > p {
     display: none;
   }

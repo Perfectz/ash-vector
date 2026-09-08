@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useCallback, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ArrowUpRight,
   Maximize,
@@ -21,7 +21,16 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { GameScene } from './scene';
-import { Simulation, neutralInput, weapons, type Input } from './simulation';
+import {
+  Simulation,
+  neutralInput,
+  weapons,
+  characters,
+  isCharacter,
+  characterKey,
+  type CharacterId,
+  type Input,
+} from './simulation';
 import { Soundscape } from './audio';
 import { TouchControls } from './TouchControls';
 import { combatWidth } from './camera';
@@ -50,6 +59,10 @@ type Snapshot = {
   bestCombo: number;
   checkpoint: number;
   hurt: boolean;
+  character: CharacterId;
+  melee: number;
+  jumps: number;
+  banter: Simulation['banter'];
 };
 function snapshot(s: Simulation): Snapshot {
   return {
@@ -75,13 +88,17 @@ function snapshot(s: Simulation): Snapshot {
     bestCombo: s.bestCombo,
     checkpoint: s.checkpoint,
     hurt: s.time - s.player.lastDamage < 0.25,
+    character: s.character,
+    melee: s.player.meleeCooldown,
+    jumps: s.player.jumps,
+    banter: { ...s.banter },
   };
 }
 const sectors = [
-  'SKYBRIDGE BREACH',
-  'FOUNDRY APPROACH',
-  'THE KILLING FLOOR',
-  'SIEGE ENGINE',
+  'THE IDEA BACKLOG',
+  'SCOPE CREEP FACTORY',
+  'APPROVAL PURGATORY',
+  'THE DEADLINE',
 ];
 function clock(t: number) {
   return `${Math.floor(t / 60)
@@ -96,16 +113,31 @@ export default function Game() {
     sim = useRef<Simulation | null>(null),
     scene = useRef<GameScene | null>(null),
     sound = useRef<Soundscape | null>(null);
-  const control = useRef<Input>(neutralInput()),
-    keys = useRef(new Set<string>()),
-    pointer = useRef({ x: 0, y: 0, used: false, down: false }),
-    touch = useRef({ x: 0, fire: false });
+  const control = useRef<Input>(neutralInput());
+  const keys = useRef(new Set<string>());
+  const pointer = useRef({ x: 0, y: 0, used: false, down: false });
+  const touch = useRef({ x: 0, fire: false });
   const [ready, setReady] = useState(false),
     [error, setError] = useState(''),
     [muted, setMuted] = useState(false),
     [quality, setQuality] = useState('high');
   const [view, setView] = useState<Snapshot>(() => snapshot(new Simulation()));
   const [help, setHelp] = useState(false);
+  const characterRef = useRef<CharacterId>('patrick');
+  const [rosterStatus, setRosterStatus] = useState<
+    Record<CharacterId, 'loading' | 'ready' | 'error'>
+  >({ operative: 'loading', patrick: 'loading', su: 'loading' });
+  const selectHero = (id: CharacterId) => {
+    if (rosterStatus[id] !== 'ready') return;
+    characterRef.current = id;
+    sim.current?.setCharacter(id);
+    if (sim.current) setView(snapshot(sim.current));
+    try {
+      localStorage.setItem(characterKey, id);
+    } catch {
+      /* Optional preference. */
+    }
+  };
   const [characterStyle, setCharacterStyle] = useState<CharacterStyle>('3d');
   const [spriteStatus, setSpriteStatus] = useState<
     'loading' | 'ready' | 'error'
@@ -133,7 +165,7 @@ export default function Game() {
     if (s.mode === 'menu') s.start();
     else if (s.mode === 'paused') s.togglePause();
     else if (s.mode === 'won') {
-      sim.current = new Simulation();
+      sim.current = new Simulation(characterRef.current);
       sim.current.start();
       scene.current!.menu = true;
     } else if (s.mode === 'dead') s.retry();
@@ -160,7 +192,13 @@ export default function Game() {
   };
   useEffect(() => {
     if (!host.current) return;
-    const s = new Simulation();
+    try {
+      const saved = localStorage.getItem(characterKey);
+      if (isCharacter(saved)) characterRef.current = saved;
+    } catch {
+      /* Default to Patrick when storage is unavailable. */
+    }
+    const s = new Simulation(characterRef.current);
     sim.current = s;
     sound.current = new Soundscape();
     let frame = 0,
@@ -180,6 +218,22 @@ export default function Game() {
     try {
       const world = new GameScene(host.current);
       scene.current = world;
+      for (const id of ['operative', 'patrick', 'su'] as const) {
+        void world.rosterSprites[id].readyPromise
+          .then(() => {
+            if (running)
+              setRosterStatus((previous) => ({ ...previous, [id]: 'ready' }));
+          })
+          .catch(() => {
+            if (!running) return;
+            setRosterStatus((previous) => ({ ...previous, [id]: 'error' }));
+            if (characterRef.current === id) {
+              characterRef.current = 'operative';
+              sim.current?.setCharacter('operative');
+              if (sim.current) setView(snapshot(sim.current));
+            }
+          });
+      }
       void world.spritePilot.readyPromise
         .then(() => {
           if (!running) return;
@@ -283,6 +337,7 @@ export default function Game() {
           input.dash = false;
           input.grenade = false;
           input.switchWeapon = false;
+          input.melee = false;
           accumulator -= 1 / 60;
         }
         for (const e of current.events) {
@@ -315,6 +370,9 @@ export default function Game() {
         control.current.dash = true;
       if (code === 'KeyE') control.current.grenade = true;
       if (code === 'KeyQ') control.current.switchWeapon = true;
+      if (code === 'KeyK') control.current.melee = true;
+      if (/^Digit[1-8]$/.test(code) && sim.current)
+        sim.current.player.weapon = Number(code.slice(-1)) - 1;
     };
     const keydown = (e: KeyboardEvent) => {
       if (introIsOpen.current) return;
@@ -337,7 +395,7 @@ export default function Game() {
         else if (current.mode === 'paused') current.togglePause();
         else if (current.mode === 'dead') current.retry();
         else {
-          sim.current = new Simulation();
+          sim.current = new Simulation(characterRef.current);
           sim.current.start();
           scene.current!.menu = true;
         }
@@ -402,6 +460,7 @@ export default function Game() {
         [1, 'ShiftLeft'],
         [2, 'KeyQ'],
         [4, 'KeyE'],
+        [3, 'KeyK'],
       ] as const) {
         if (gp.buttons[i]?.pressed && !previousButtons[i]) action(code);
       }
@@ -433,12 +492,16 @@ export default function Game() {
     if (document.fullscreenElement) void document.exitFullscreen();
     else void document.documentElement.requestFullscreen().catch(() => {});
   };
-  const touchAction = (key: 'jump' | 'dash' | 'grenade' | 'switchWeapon') => {
+  const touchAction = (
+    key: 'jump' | 'dash' | 'grenade' | 'switchWeapon' | 'melee',
+  ) => {
     control.current[key] = true;
   };
-  const updateTouch = useCallback((x: number, fire: boolean) => {
+  // Keep one input sink for the lifetime of this game; TouchControls must not
+  // reset held pointers each time the HUD snapshot renders.
+  const [updateTouch] = useState(() => (x: number, fire: boolean) => {
     touch.current = { x, fire };
-  }, []);
+  });
   const inMission = view.mode !== 'menu',
     playing = view.mode === 'playing';
   const characterPicker = (
@@ -472,6 +535,43 @@ export default function Game() {
       <p>Same arsenal. Your style.</p>
     </fieldset>
   );
+  const rosterPicker = (
+    <fieldset className="roster-picker">
+      <legend>CHOOSE YOUR LEAD</legend>
+      <div className="roster-options">
+        {(['patrick', 'su', 'operative'] as const).map((id) => (
+          <button
+            key={id}
+            type="button"
+            data-hero={id}
+            aria-pressed={view.character === id}
+            disabled={rosterStatus[id] !== 'ready'}
+            onClick={() => selectHero(id)}
+          >
+            <span
+              className={`roster-portrait portrait-${id}`}
+              aria-hidden="true"
+            />
+            <strong>{characters[id].name}</strong>
+            <small>
+              {rosterStatus[id] === 'loading'
+                ? 'Loading…'
+                : rosterStatus[id] === 'error'
+                  ? 'Unavailable'
+                  : characters[id].ability}
+            </small>
+          </button>
+        ))}
+      </div>
+      <p>
+        {view.character === 'patrick'
+          ? '“One tiny change. Make it triple A.”'
+          : view.character === 'su'
+            ? '“You said that twelve changes ago.”'
+            : 'The original prototype. Still on payroll.'}
+      </p>
+    </fieldset>
+  );
   return (
     <main
       className={`game-shell ${inMission ? 'in-mission' : ''} ${playing ? 'is-playing' : ''} ${phoneMode ? 'touch-mode' : ''}`}
@@ -480,6 +580,10 @@ export default function Game() {
       data-player-y={view.y.toFixed(2)}
       data-kills={view.kills}
       data-character-style={characterStyle}
+      data-character={view.character}
+      data-jumps={view.jumps}
+      data-melee-cooldown={view.melee.toFixed(2)}
+      data-weapon={view.weapon}
     >
       <div
         className="world"
@@ -492,7 +596,7 @@ export default function Game() {
         <button
           className="wordmark"
           onClick={() => {
-            sim.current = new Simulation();
+            sim.current = new Simulation(characterRef.current);
             if (scene.current) {
               scene.current.menu = true;
               scene.current.pilot.root.visible = true;
@@ -505,7 +609,7 @@ export default function Game() {
           <span className="wordmark-suffix">{'//'}</span>
         </button>
         <div className="header-status">
-          <i /> {inMission ? 'OPERATION BLACK RAIN' : 'ALL SYSTEMS ONLINE'}
+          <i /> {inMission ? 'ONE TINY CHANGE' : 'SCOPE: SLIGHTLY EXCEEDED'}
         </div>
         <div className="utilities">
           <button
@@ -541,18 +645,18 @@ export default function Game() {
       {!inMission && (
         <section className="title-screen">
           <div className="eyebrow">
-            <span /> 2.5D RUN & GUN / BLACK RAIN
+            <span /> PATRICK + SU / SCOPE CREEP PROTOCOL
           </div>
           <h1>
-            ASH
+            ONE TINY
             <br />
-            <span>VECTOR</span>
+            <span>CHANGE.</span>
             <b>™</b>
           </h1>
           <p className="intro">
-            One operative. A city under siege.
+            Patrick asked for one little upgrade.
             <br />
-            Bring the machine to its knees.
+            Su brought a jetpack. The deadline brought an army.
           </p>
           {phoneMode && (
             <p className="phone-intro">
@@ -560,10 +664,13 @@ export default function Game() {
               and dash.
             </p>
           )}
-          {characterPicker}
+          {rosterPicker}
+          {view.character === 'operative' && characterPicker}
           <button
             className="deploy"
-            disabled={!ready || !!error}
+            disabled={
+              !ready || !!error || rosterStatus[view.character] === 'loading'
+            }
             onClick={deploy}
           >
             <span>
@@ -582,7 +689,7 @@ export default function Game() {
               setIntroOpen(true);
             }}
           >
-            <Play size={14} /> WATCH INTRO <span>00:20</span>
+            <Play size={14} /> ORIGIN STORY <span>00:20</span>
           </button>
           {error && (
             <p className="error">
@@ -604,9 +711,9 @@ export default function Game() {
       )}
       {!inMission && (
         <div className="scene-caption">
-          <span>THE CITADEL</span>
-          <strong>35° 41′ N / 139° 41′ E</strong>
-          <small>UPPER TRANSIT // ELEVATION 840M</small>
+          <span>THE BUILD THAT ESCAPED</span>
+          <strong>2 HEROES / 8 WEAPONS / ZERO SCOPE CONTROL</strong>
+          <small>HAND-DRAWN ATTITUDE. THREE-DIMENSIONAL PROBLEMS.</small>
         </div>
       )}
       {inMission && (
@@ -614,7 +721,7 @@ export default function Game() {
           <section className="player-hud" aria-label="Operative status">
             <div className="operator-line">
               <Shield size={17} />
-              <span>OPERATIVE / 01</span>
+              <span>{characters[view.character].name} / 01</span>
               <b>
                 {Math.ceil(view.hp)}
                 <small> / 100</small>
@@ -639,7 +746,7 @@ export default function Game() {
             <h2>{sectors[view.sector]}</h2>
             <p>
               {view.bossActive
-                ? 'Destroy the MANTICORE siege engine'
+                ? 'Ship it. Defeat THE DEADLINE.'
                 : view.remaining
                   ? `${view.remaining} hostiles remaining. Clear the lockdown.`
                   : 'Sector clear. Advance to the next gate.'}
@@ -656,8 +763,8 @@ export default function Game() {
           {view.bossActive && view.bossHp > 0 && (
             <section className="boss-hud">
               <div>
-                <span>MANTICORE</span>
-                <small>SIEGE ENGINE / PHASE 0{view.bossPhase}</small>
+                <span>THE DEADLINE</span>
+                <small>FINAL REVIEW / PHASE 0{view.bossPhase}</small>
               </div>
               <Progress
                 value={view.bossHp / 10}
@@ -683,6 +790,15 @@ export default function Game() {
               <span>CHAIN</span>
             </div>
           )}
+          {view.banter.time > 0 && (
+            <aside
+              className={`radio-banter radio-${view.banter.speaker.toLowerCase()}`}
+              aria-live="polite"
+            >
+              <b>{view.banter.speaker}</b>
+              <span>{view.banter.text}</span>
+            </aside>
+          )}
           <section className="loadout">
             <div className="weapon-slot">
               <Crosshair size={23} />
@@ -706,6 +822,9 @@ export default function Game() {
               ))}
               <kbd>Q</kbd>
             </div>
+            <p className="weapon-description">
+              {weapons[view.weapon].description}
+            </p>
           </section>
           <div className="ability-hud">
             <div className={`dash-meter ${view.dash <= 0 ? 'ready' : ''}`}>
@@ -740,7 +859,28 @@ export default function Game() {
             <div className="eyebrow">MISSION SUSPENDED</div>
             <h2>HOLD POSITION.</h2>
             <p>Take a breath. The city can wait.</p>
-            {characterPicker}
+            {rosterPicker}
+            {view.character === 'operative' && characterPicker}
+            <fieldset className="arsenal-picker">
+              <legend>TRY ANOTHER WEAPON</legend>
+              <div>
+                {weapons.map((weapon, index) => (
+                  <button
+                    key={weapon.short}
+                    aria-pressed={view.weapon === index}
+                    onClick={() => {
+                      if (sim.current) {
+                        sim.current.player.weapon = index;
+                        setView(snapshot(sim.current));
+                      }
+                    }}
+                  >
+                    <b>{index + 1}</b> {weapon.short}
+                  </button>
+                ))}
+              </div>
+              <p>{weapons[view.weapon].description}</p>
+            </fieldset>
             <button className="deploy" onClick={deploy}>
               <span>RESUME OPERATION</span>
               <Play size={21} />
@@ -798,10 +938,10 @@ export default function Game() {
                 ? 'OPERATION BLACK RAIN // COMPLETE'
                 : 'OPERATIVE SIGNAL LOST'}
             </div>
-            <h2>{view.mode === 'won' ? 'MACHINE DOWN.' : 'SIGNAL LOST.'}</h2>
+            <h2>{view.mode === 'won' ? 'BUILD SHIPPED.' : 'MINOR SETBACK.'}</h2>
             <p>
               {view.mode === 'won'
-                ? 'The skybridge is yours. The city has a fighting chance.'
+                ? 'Patrick: “Great. Now make it multiplayer.” Su: “Credits. Roll the credits.”'
                 : `Checkpoint 0${view.checkpoint + 1} secured. Get back into the fight.`}
             </p>
             <div className="result-stats">
@@ -841,6 +981,8 @@ export default function Game() {
           dash={view.dash}
           grenades={view.grenades}
           weapon={view.weapon}
+          character={view.character}
+          melee={view.melee}
         />
       )}
       <footer className="game-footer">
@@ -853,6 +995,12 @@ export default function Game() {
           <span>JUMP ×2</span>
           <kbd>SHIFT</kbd>
           <span>DASH</span>
+          {view.character === 'patrick' && (
+            <>
+              <kbd>K</kbd>
+              <span>SABER</span>
+            </>
+          )}
           <button className="help-button" onClick={() => setHelp(!help)}>
             CONTROLS {help ? '−' : '+'}
           </button>
@@ -889,7 +1037,16 @@ export default function Game() {
             air.
           </p>
           <p>
-            <kbd>E</kbd> Grenade. <kbd>Q</kbd> Cycle weapons.
+            <kbd>E</kbd> Grenade. <kbd>Q</kbd> Cycle weapons. <kbd>1–8</kbd>{' '}
+            Pick a weapon directly.
+          </p>
+          <p>
+            <kbd>K</kbd> Patrick’s energy saber. Gamepad <kbd>Y / △</kbd>. On
+            phones, tap SABER.
+          </p>
+          <p>
+            Su’s second jump gives a stronger cyan boost. Press Jump again in
+            midair.
           </p>
           <p>
             <kbd>ESC</kbd> Pause. <kbd>M</kbd> Mute.

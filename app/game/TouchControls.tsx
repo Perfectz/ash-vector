@@ -6,16 +6,18 @@ import {
   type PointerEvent,
 } from 'react';
 import { TouchState, type TouchAction } from './touch';
-import { weapons } from './simulation';
+import { weapons, type CharacterId } from './simulation';
 
 type Props = {
   onChange: (x: number, fire: boolean) => void;
-  action: (key: 'jump' | 'dash' | 'grenade' | 'switchWeapon') => void;
+  action: (key: 'jump' | 'dash' | 'grenade' | 'switchWeapon' | 'melee') => void;
   autoFire: boolean;
   toggleAutoFire: () => void;
   dash: number;
   grenades: number;
   weapon: number;
+  character: CharacterId;
+  melee: number;
 };
 export function TouchControls({
   onChange,
@@ -25,6 +27,8 @@ export function TouchControls({
   dash,
   grenades,
   weapon,
+  character,
+  melee,
 }: Props) {
   const fingers = useRef(new TouchState());
   const [pressed, setPressed] = useState<TouchAction[]>([]);
@@ -107,6 +111,18 @@ export function TouchControls({
         </TouchButton>
         <span>MOVE</span>
       </div>
+      {character === 'patrick' && (
+        <TouchButton
+          className="touch-saber"
+          aria-label="Energy sword attack"
+          control="melee"
+          pressed={pressed.includes('melee')}
+          {...handlers}
+        >
+          <b>╱</b>
+          <span>{melee > 0 ? 'RECOVERY' : 'SABER'}</span>
+        </TouchButton>
+      )}
       <div className={`touch-abilities ${autoFire ? 'assisted' : 'manual'}`}>
         <TouchButton
           className="touch-dash"

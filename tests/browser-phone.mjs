@@ -113,6 +113,14 @@ for (const [width, height, label] of [
     )
       break;
   }
+  const selectedHero = process.argv.find(arg => arg.startsWith('--hero='))?.split('=')[1] || (process.argv.includes('--sprite') ? 'operative' : null);
+  if (selectedHero) {
+    for (let i = 0; i < 60; i++) {
+      if (await evaluate(`!!document.querySelector('[data-hero="${selectedHero}"]:not(:disabled)')`)) break;
+      await wait(100);
+    }
+    await evaluate(`document.querySelector('[data-hero="${selectedHero}"]').click()`);
+  }
   if (process.argv.includes('--sprite')) {
     for (let i = 0; i < 60; i++) {
       const ready = await evaluate(`!![...document.querySelectorAll('.character-options button')].find(b=>b.textContent.includes('2D SPRITE')&&!b.disabled)`);
@@ -198,7 +206,7 @@ for (const [width, height, label] of [
       await evaluate(
         `document.querySelector('[aria-label="Switch weapon"]').textContent`,
       )
-    ).includes('BREACH'),
+    ).includes('SPREAD'),
     'Weapon switch must advance exactly once',
   );
   await tap('Throw grenade, 3 remaining');
@@ -302,6 +310,14 @@ if (!process.argv.includes('--quick')) {
       )
     )
       break;
+  }
+  const selectedHero = process.argv.find(arg => arg.startsWith('--hero='))?.split('=')[1] || (process.argv.includes('--sprite') ? 'operative' : null);
+  if (selectedHero) {
+    for (let i = 0; i < 60; i++) {
+      if (await evaluate(`!!document.querySelector('[data-hero="${selectedHero}"]:not(:disabled)')`)) break;
+      await wait(100);
+    }
+    await evaluate(`document.querySelector('[data-hero="${selectedHero}"]').click()`);
   }
   if (process.argv.includes('--sprite')) {
     for (let i = 0; i < 60; i++) {

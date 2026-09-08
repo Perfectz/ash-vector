@@ -2,6 +2,7 @@ export type TouchAction =
   | 'left'
   | 'right'
   | 'fire'
+  | 'melee'
   | 'jump'
   | 'dash'
   | 'grenade'
