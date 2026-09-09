@@ -20,6 +20,12 @@ Hero sources retain white backgrounds; the runtime applies border-connected back
 
 ## Verification evidence
 
+### Spectacle update
+
+`app/game/spectacle.ts` adds additive energy glows, velocity-stretched sparks, weapon-colored trails, expanding blast rings and ground shockwaves, saber-tip trails, dash/air-boost wakes, landing dust and drifting embers. The atmosphere uses deeper blue-green fog and stronger bloom. Effects remain visible without bloom in low quality; emissions are reduced there. Two instanced particle meshes share a total cap of 900 particles, with 18 reusable shock rings. Effects freeze on pause and clear on menu/restart. No gameplay damage, timing or hitboxes changed.
+
+`tests/browser-effects.mjs` checks actual combat emission, particle bounds, pause stability and low-quality rendering without browser exceptions. The phone browser smoke test passes portrait, landscape, compact landscape and small portrait viewports after this update. Physical device performance remains unverified.
+
 - `tests/roster.test.mjs`: directional sword reach, no rear/far hits, once-per-swing damage, cooldown, pause/retry; Su boost and rejected third jump; unique ranged mechanics; shield resistance and rushing enemy movement.
 - `tests/arsenal-missions.test.mjs`: all 16 lead/weapon combinations complete the entire 34-enemy/boss mission through normal inputs with no deaths under the test driver.
 - Existing gameplay, phone-input, camera, and original sprite tests pass. TypeScript and scoped lint are checked separately.

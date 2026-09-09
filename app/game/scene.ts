@@ -17,6 +17,7 @@ import { Simulation, weapons, type Enemy, type GameEvent } from './simulation';
 import { frameCombatCamera, aimOnCombatPlane } from './camera';
 import { SpriteOperative, type CharacterStyle } from './sprite';
 import { EnemySprites } from './enemySprites';
+import { Spectacle } from './spectacle';
 
 type Particle = {
   p: T.Vector3;
@@ -50,6 +51,7 @@ export class GameScene {
     { root: T.Group; rig?: Rig; sprite?: T.Sprite; fallback?: T.Group }
   >();
   enemyArt = new EnemySprites();
+  spectacle = new Spectacle();
   saberArc = new T.Mesh(
     new T.RingGeometry(2.65, 3.05, 36, 1, -Math.PI / 3, (Math.PI * 2) / 3),
     new T.MeshBasicMaterial({
@@ -58,6 +60,8 @@ export class GameScene {
       opacity: 0.5,
       side: T.DoubleSide,
       depthWrite: false,
+      blending: T.AdditiveBlending,
+      toneMapped: false,
     }),
   );
   particles: Particle[] = [];
@@ -88,8 +92,9 @@ export class GameScene {
     this.renderer.toneMapping = T.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.05;
     host.appendChild(this.renderer.domElement);
-    this.scene.background = new T.Color(0x647778);
-    this.scene.fog = new T.FogExp2(0x647778, 0.011);
+    this.scene.background = new T.Color(0x41565c);
+    this.scene.fog = new T.FogExp2(0x41565c, 0.011);
+    this.scene.add(this.spectacle.root);
     const pmrem = new T.PMREMGenerator(this.renderer);
     const room = new RoomEnvironment();
     const env = pmrem.fromScene(room, 0.04);
@@ -206,7 +211,7 @@ export class GameScene {
     this.scene.add(this.gate, this.flash);
     this.composer = new EffectComposer(this.renderer);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
-    this.bloom = new UnrealBloomPass(new T.Vector2(1, 1), 0.38, 0.55, 1.2);
+    this.bloom = new UnrealBloomPass(new T.Vector2(1, 1), 0.58, 0.65, 1.05);
     this.composer.addPass(this.bloom);
     this.composer.addPass(new OutputPass());
     this.resize();
@@ -242,6 +247,7 @@ export class GameScene {
     return hit ? { x: hit.x, y: hit.y, z: 0 } : sim.aimPoint;
   }
   burst(event: GameEvent) {
+    this.spectacle.burst(event, this.quality === 'high');
     const explosion = event.kind === 'explosion' || event.kind === 'victory',
       hurt = event.kind === 'hurt';
     if (
@@ -603,9 +609,12 @@ export class GameScene {
     this.particleMesh.instanceMatrix.needsUpdate = true;
     if (this.particleMesh.instanceColor)
       this.particleMesh.instanceColor.needsUpdate = true;
+    this.spectacle.update(dt, sim, this.quality === 'high');
+    this.host.dataset.effectParticles = String(this.spectacle.motes.length);
     this.composer.render();
   }
   dispose() {
+    this.spectacle.dispose();
     for (const sprite of Object.values(this.rosterSprites)) sprite.dispose();
     this.enemyArt.dispose();
     this.saberArc.material.dispose();
