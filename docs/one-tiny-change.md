@@ -20,6 +20,12 @@ Hero sources retain white backgrounds; the runtime applies border-connected back
 
 ## Verification evidence
 
+### Recorded audio update
+
+The user-supplied Kenney Sci-Fi Sounds 1.0 pack contributes 21 CC0 recordings, totaling about 260 KB of MP3 audio. Original licensing and source notes are in `public/media/audio/kenney/`. The eight weapons now have separate sound profiles; Patrick's saber and Su's second jump layer recordings with synthesized energy sounds. Impacts vary, explosions include a bass layer, and distant effects use restrained stereo panning.
+
+Samples load after user-initiated audio startup with four concurrent requests and synthesized fallbacks. A 24-sample voice cap, impact/flame rate limits, master compression, short envelopes and explosion-triggered music ducking control overlap. Pause stops sample tails; victory can ring out. `tests/browser-audio.mjs` verifies sample decoding/playback, mute, pause, the voice limit, non-silent unclipped output, and missing-file fallback. `--phone` starts the audio with a touch gesture in phone emulation. This does not establish physical speaker/headphone quality or Safari compatibility.
+
 ### Spectacle update
 
 `app/game/spectacle.ts` adds additive energy glows, velocity-stretched sparks, weapon-colored trails, expanding blast rings and ground shockwaves, saber-tip trails, dash/air-boost wakes, landing dust and drifting embers. The atmosphere uses deeper blue-green fog and stronger bloom. Effects remain visible without bloom in low quality; emissions are reduced there. Two instanced particle meshes share a total cap of 900 particles, with 18 reusable shock rings. Effects freeze on pause and clear on menu/restart. No gameplay damage, timing or hitboxes changed.

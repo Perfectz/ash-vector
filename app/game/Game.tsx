@@ -342,10 +342,10 @@ export default function Game() {
         }
         for (const e of current.events) {
           world.burst(e);
-          sound.current?.effect(e.kind, e.weapon);
+          sound.current?.effect(e.kind, e.weapon, (e.x - current.player.x) / 24);
         }
         current.events = [];
-        sound.current?.tick(current.mode === 'playing', current.boss.active);
+        sound.current?.tick(current.mode === 'playing', current.boss.active, current.mode === 'paused' || current.mode === 'menu');
         world.render(timestamp / 1000, current, delta);
         if (firstFrame) {
           setReady(true);
